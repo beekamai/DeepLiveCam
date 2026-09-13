@@ -97,6 +97,9 @@ reprojection: bool = True
 # (mirror, tracking, masks, models); the workers re-detect and reset their
 # trackers right away instead of showing the bare face until the next cycle.
 settings_epoch: int = 0
+# Run the models through TensorRT when its runtime is installed (2-3x faster
+# than the CUDA graph; one-off engine build per model).
+tensorrt: bool = True
 
 # Face Swapper Specific Options
 face_swapper_enabled: bool = True # General toggle for the swapper processor

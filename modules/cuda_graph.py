@@ -33,12 +33,21 @@ class GraphSession:
 
     def __init__(self, model_path: str, input_name: str,
                  input_shape: Sequence[int]) -> None:
-        self._session = onnxruntime.InferenceSession(
-            model_path, providers=[("CUDAExecutionProvider", {"enable_cuda_graph": "1"})],
-        )
         self._input_name = input_name
         self._input_shape = tuple(input_shape)
         self._lock = threading.Lock()
+        # TensorRT compiles the whole model into one engine — no launch
+        # sequence to record; plain runs are the fastest path there.
+        from modules.providers import make_session
+
+        self._trt = make_session(model_path)
+        if self._trt is not None:
+            self._session = self._trt
+            self._output_names = [o.name for o in self._session.get_outputs()]
+            return
+        self._session = onnxruntime.InferenceSession(
+            model_path, providers=[("CUDAExecutionProvider", {"enable_cuda_graph": "1"})],
+        )
 
         self._ort_input = onnxruntime.OrtValue.ortvalue_from_numpy(
             np.zeros(self._input_shape, dtype=np.float32), "cuda", 0,
@@ -58,8 +67,9 @@ class GraphSession:
     def run(self, output_names: Optional[List[str]],
             input_feed: Dict[str, np.ndarray], **kwargs: Any) -> List[np.ndarray]:
         blob = input_feed.get(self._input_name)
-        if blob is None or tuple(blob.shape) != self._input_shape:
-            return self._session.run(output_names, input_feed, **kwargs)
+        if self._trt is not None or blob is None or tuple(blob.shape) != self._input_shape:
+            with GRAPH_LOCK:
+                return self._session.run(output_names, input_feed, **kwargs)
 
         with self._lock, GRAPH_LOCK:
             self._ort_input.update_inplace(np.ascontiguousarray(blob, dtype=np.float32))

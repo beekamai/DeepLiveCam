@@ -47,6 +47,31 @@ global lock stays and stages run one after another on the device.  CPU work
 thread; that is the only overlap available.  A split enhancer thread was
 measured earlier under the global lock: no gain.
 
-Levers that remain: fewer CPU milliseconds around the models (paste-back
-and mask warps are ~8 ms of the swap stage), running XSeg every 2nd frame
-(`occlusion_interval`), and TensorRT (no wheels for this stack yet).
+## TensorRT (`modules/providers.py`)
+
+The launch-bound diagnosis points straight at kernel fusion, and the ORT
+1.26 wheel already carries `TensorrtExecutionProvider` linked against
+`nvinfer_10`; the runtime comes from `tensorrt-cu12-libs` on NVIDIA's own
+package index (`requirements-tensorrt.txt`, `install-tensorrt.bat`; it is
+not on PyPI, which is why it looked unavailable at first).  Whole-model
+engines, fp16, cached on disk per GPU architecture:
+
+| model | CUDA graph | TensorRT | engine build |
+|---|---|---|---|
+| hyperswap_1b_256 | 9.5 ms | 4.2 ms | 46 s |
+| GPEN-BFR-256 | 8.5 ms | 3.2 ms | 53 s |
+| xseg_3 | 4.7 ms | 2.1 ms | 16 s |
+| inswapper_128_fp16 | 19 ms | 5.4 ms | 30 s |
+
+Gotchas met on the way: provider options must be the strings `"True"` /
+`"False"` — `"1"` makes ORT drop the provider silently and fall back to
+CUDA (the session then reports only CUDA in `get_providers()`, which is the
+check `make_session` does); plain `session.run` is faster than io-binding
+for TensorRT (no graph to replay).  Every session site — `GraphSession`,
+`create_onnx_session`, `OnnxSwapper`, the legacy inswapper path — asks
+`make_session` first and keeps its CUDA path as the fallback, so a missing
+runtime or a failed build costs nothing but a log line.
+
+Levers that remain after TensorRT: the CPU milliseconds around the models
+(paste-back and mask warps are ~8 ms of the swap stage) and running XSeg
+every 2nd frame (`occlusion_interval`).

@@ -74,6 +74,7 @@ No CUDA Toolkit or cuDNN installation is needed — the CUDA libraries come from
 
    The script creates `venv`, installs the bundled `insightface` wheel and everything from `requirements.txt` (~3 GB with the CUDA libraries). It only needs to run once.
 6. **Run** — `run-cuda.bat` (or `venv\Scripts\python run.py --execution-provider cuda`). The first start downloads the face detector (~300 MB); each swapper or enhancer downloads the first time you select it.
+7. **Optional, recommended — TensorRT** — `install-tensorrt.bat` (~3.4 GB from NVIDIA's package index). The models then run 2-3× faster (HyperSwap 9.5 → 4.2 ms, GPEN-256 8.5 → 3.2 ms, XSeg 4.7 → 2.1 ms). The first use of each model builds its engine — up to a minute, once per model and GPU, cached in `models/trt_cache`. Switch between *TensorRT* and *CUDA graph* on the Models tab; `--no-tensorrt` disables it from the command line.
 
 <details>
 <summary>Manual install (any platform)</summary>
@@ -92,7 +93,8 @@ python run.py --execution-provider cuda        # coreml on Apple Silicon, cpu wi
 <summary>Troubleshooting</summary>
 
 - **`Could not open the camera`** — another app holds it (Camo Studio, a browser tab, Discord). Close it or pick another camera. Calibration and Live cannot run at the same time; opening one closes the other.
-- **Low FPS with the GPU busy** — the swap models are dozens of tiny GPU kernels; the app is launch-bound, not compute-bound. Keep the CUDA graphs enabled (default), prefer HyperSwap 1b over Inswapper (same time, 4× the pixels), and close other GPU users (browsers with hardware acceleration, Discord overlay).
+- **Low FPS with the GPU busy** — the swap models are hundreds of tiny GPU kernels; the app is launch-bound, not compute-bound. Install TensorRT (step 7) — it fuses each model into one engine; prefer HyperSwap 1b over Inswapper (same cost, 4× the pixels); close other GPU users (browsers with hardware acceleration, Discord overlay).
+- **Long freeze on first Live after installing TensorRT** — engines are being built (the status line says which model); it happens once per model.
 - **`No face in the selected source image`** — the source photo must show one clear, roughly frontal face.
 - **Swap shows the bare face on turns** — recalibrate (Motion → Calibrate…) and turn *as far as the swap should still hold*; the fade begins beyond that.
 - **Video output fails** — ffmpeg is not on `PATH`; see step 4.
@@ -110,7 +112,7 @@ Settings tabs:
 
 | Tab | What lives there |
 |---|---|
-| Models | swapper, enhancer, enhancer crop, transparency, sharpness |
+| Models | swapper, enhancer, enhancer crop, transparency, sharpness, backend (TensorRT / CUDA graph) |
 | Mask | face outline mask, occlusion mask (XSeg) and its interval, Poisson blend, mask overlay, mouth mask, real blinks, real eyes |
 | Motion | face tracking, low-latency reprojection, calibration profiles and their switches |
 | Output | webcam colour fix, FPS counter, mirror, language, Destroy |
@@ -129,7 +131,7 @@ python run.py [-s SOURCE] [-t TARGET] [-o OUTPUT]
               [--calibration NAME_OR_PATH] [--mouth-mask] [--many-faces] [--map-faces]
               [--keep-fps] [--keep-audio] [--keep-frames]
               [--video-encoder libx264|libx265|libvpx-vp9] [--video-quality 0-51]
-              [--live-mirror] [--lang en|ru] [--max-memory GB] [--execution-threads N]
+              [--live-mirror] [--lang en|ru] [--max-memory GB] [--execution-threads N] [--no-tensorrt]
 ```
 Passing `-s/--source` runs headless (no window).
 </details>
@@ -147,6 +149,7 @@ Passing `-s/--source` runs headless (no window).
 ```
 run.py                  entry point (registers CUDA DLLs, starts the UI or the CLI)
 install-windows.bat     one-shot setup on Windows
+install-tensorrt.bat    optional TensorRT runtime (2-3x faster models)
 modules/
   ui.py                 PySide6 main window and the live loop
   ui_calibration.py     guided calibration dialog
@@ -236,6 +239,7 @@ AGPL-3.0, as upstream. Models keep their own licences.
 
    Скрипт создаёт `venv`, ставит приложенный wheel `insightface` и всё из `requirements.txt` (~3 ГБ вместе с библиотеками CUDA). Запускается один раз.
 6. **Запуск** — `run-cuda.bat` (или `venv\Scripts\python run.py --execution-provider cuda`). Первый старт скачивает детектор лиц (~300 МБ); каждый сваппер или улучшатель скачивается при первом выборе.
+7. **По желанию, рекомендуется — TensorRT** — `install-tensorrt.bat` (~3,4 ГБ с индекса пакетов NVIDIA). Модели после этого работают в 2–3 раза быстрее (HyperSwap 9,5 → 4,2 мс, GPEN-256 8,5 → 3,2 мс, XSeg 4,7 → 2,1 мс). При первом использовании каждой модели собирается её движок — до минуты, один раз на модель и видеокарту, кэш в `models/trt_cache`. Переключение *TensorRT* / *CUDA-граф* — на вкладке Модели; `--no-tensorrt` отключает из командной строки.
 
 <details>
 <summary>Ручная установка (любая платформа)</summary>
@@ -254,7 +258,8 @@ python run.py --execution-provider cuda        # coreml на Apple Silicon, cpu 
 <summary>Если что-то не так</summary>
 
 - **`Could not open the camera`** — камеру держит другое приложение (Camo Studio, вкладка браузера, Discord). Закройте его или выберите другую камеру. Калибровка и Live не работают одновременно: открытие одного закрывает другое.
-- **Низкий FPS при занятом GPU** — модели подмены состоят из десятков крошечных GPU-ядер, приложение упирается в их запуск, а не в вычисления. Держите CUDA-графы включёнными (по умолчанию), берите HyperSwap 1b вместо Inswapper (то же время, в 4 раза больше пикселей), закрывайте других потребителей GPU (браузеры с аппаратным ускорением, оверлей Discord).
+- **Низкий FPS при занятом GPU** — модели подмены состоят из сотен крошечных GPU-ядер, приложение упирается в их запуск, а не в вычисления. Поставьте TensorRT (шаг 7) — он сплавляет каждую модель в один движок; берите HyperSwap 1b вместо Inswapper (та же цена, в 4 раза больше пикселей); закрывайте других потребителей GPU (браузеры с аппаратным ускорением, оверлей Discord).
+- **Долгое зависание при первом Live после установки TensorRT** — собираются движки (в строке статуса видно, какая модель); это один раз на модель.
 - **`No face in the selected source image`** — на исходном фото должно быть одно чёткое, примерно фронтальное лицо.
 - **На поворотах видно своё лицо** — перекалибруйтесь (Движение → Калибровка…) и поворачивайтесь *до предела, где подмена ещё должна держаться*; затухание начинается за ним.
 - **Не сохраняется видео** — ffmpeg нет в `PATH`; см. шаг 4.
@@ -272,7 +277,7 @@ python run.py --execution-provider cuda        # coreml на Apple Silicon, cpu 
 
 | Вкладка | Что там |
 |---|---|
-| Модели | сваппер, улучшатель, кроп улучшателя, прозрачность, резкость |
+| Модели | сваппер, улучшатель, кроп улучшателя, прозрачность, резкость, бэкенд (TensorRT / CUDA-граф) |
 | Маска | маска по контуру, маска перекрытий (XSeg) и её интервал, Poisson-смешивание, показ маски, маска рта, настоящие моргания, свои глаза |
 | Движение | трекинг лица, репроекция, профили калибровки и их переключатели |
 | Вывод | цветокоррекция веб-камеры, счётчик FPS, зеркало, язык, Закрыть |
@@ -291,7 +296,7 @@ python run.py [-s SOURCE] [-t TARGET] [-o OUTPUT]
               [--calibration NAME_OR_PATH] [--mouth-mask] [--many-faces] [--map-faces]
               [--keep-fps] [--keep-audio] [--keep-frames]
               [--video-encoder libx264|libx265|libvpx-vp9] [--video-quality 0-51]
-              [--live-mirror] [--lang en|ru] [--max-memory GB] [--execution-threads N]
+              [--live-mirror] [--lang en|ru] [--max-memory GB] [--execution-threads N] [--no-tensorrt]
 ```
 С `-s/--source` программа работает без окна.
 </details>
@@ -309,6 +314,7 @@ python run.py [-s SOURCE] [-t TARGET] [-o OUTPUT]
 ```
 run.py                  точка входа (подключает DLL CUDA, запускает окно или CLI)
 install-windows.bat     установка на Windows одним запуском
+install-tensorrt.bat    опциональный рантайм TensorRT (модели в 2–3 раза быстрее)
 modules/
   ui.py                 главное окно PySide6 и живой цикл
   ui_calibration.py     пошаговая калибровка

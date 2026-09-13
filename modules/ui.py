@@ -460,6 +460,7 @@ def save_switch_states():
         "eye_reveal": modules.globals.eye_reveal,
         "reprojection": modules.globals.reprojection,
         "language": _LANG.current_language if _LANG is not None else "en",
+        "tensorrt": modules.globals.tensorrt,
     }
     try:
         with open("switch_states.json", "w") as f:
@@ -512,6 +513,7 @@ def load_switch_states():
         modules.globals.blink_reveal = state.get("blink_reveal", True)
         modules.globals.eye_reveal = min(1.0, max(0.0, float(state.get("eye_reveal", 0.0))))
         modules.globals.reprojection = state.get("reprojection", True)
+        modules.globals.tensorrt = state.get("tensorrt", True)
         # A profile named on the command line wins over the remembered one.
         if calibration.active() is None and state.get("calibration_profile"):
             calibration.activate_saved(state["calibration_profile"])
@@ -966,6 +968,25 @@ class MainWindow(QMainWindow):
         )
         grid.addWidget(self.cb_alignment, 2, 1)
 
+        grid.addWidget(QLabel(_("Backend:")), 5, 0)
+        self.cb_backend = QComboBox()
+        from modules.providers import tensorrt_available
+
+        self._backend_map = {_("TensorRT (fastest)"): True, _("CUDA graph"): False}
+        self.cb_backend.addItems(list(self._backend_map))
+        if tensorrt_available():
+            for label, value in self._backend_map.items():
+                if value == modules.globals.tensorrt:
+                    self.cb_backend.setCurrentText(label)
+            self.cb_backend.setToolTip(_("TensorRT compiles each model into one engine — 2-3x faster; "
+                                         "the first use of a model builds it (up to a minute)"))
+        else:
+            self.cb_backend.setCurrentText(_("CUDA graph"))
+            self.cb_backend.setEnabled(False)
+            self.cb_backend.setToolTip(_("TensorRT runtime not installed — run install-tensorrt.bat"))
+        self.cb_backend.currentTextChanged.connect(self._on_backend_change)
+        grid.addWidget(self.cb_backend, 5, 1)
+
         grid.addWidget(QLabel(_("Transparency")), 3, 0)
         self.s_transparency = self._slider(0.0, 1.0, 1.0, 100, self._on_transparency_change)
         self.s_transparency.setToolTip(
@@ -978,7 +999,7 @@ class MainWindow(QMainWindow):
         self.s_sharpness.setToolTip(_("Sharpen the enhanced face output"))
         grid.addWidget(self.s_sharpness, 4, 1)
 
-        grid.setRowStretch(5, 1)
+        grid.setRowStretch(6, 1)
         return page
 
     # ── mask tab ─────────────────────────────────────────────────────────
@@ -1356,6 +1377,24 @@ class MainWindow(QMainWindow):
     def _on_eye_reveal_change(self, value: float) -> None:
         modules.globals.eye_reveal = value
         save_switch_states()
+
+    def _on_backend_change(self, label: str) -> None:
+        value = self._backend_map.get(label)
+        if value is None or value == modules.globals.tensorrt:
+            return
+        modules.globals.tensorrt = value
+        # Models are built for one backend; drop them so the next use
+        # reloads on the chosen one.
+        _release_processor("face_swapper")
+        for key in enhancer_registry.KEYS:
+            _release_processor(key)
+        from modules.face_occluder import release as release_occluder
+
+        release_occluder()
+        _settings_changed()
+        save_switch_states()
+        update_status(_("Backend: {backend}. Models reload on next use; restart Live to apply.")
+                      .format(backend=label))
 
     def _on_language_change(self, label: str) -> None:
         global _LANG

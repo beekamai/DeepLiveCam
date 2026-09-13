@@ -49,6 +49,7 @@ def parse_args() -> None:
     program.add_argument('--occlusion-mask', help='keep occluders (hands, mics) out of the swap', dest='occlusion_mask', action='store_true')
     program.add_argument('--no-face-tracking', help='disable optical-flow face tracking in live mode', dest='no_face_tracking', action='store_true')
     program.add_argument('--calibration', help='face calibration profile to use (name under calibration/ or a path)', dest='calibration_profile', default=None)
+    program.add_argument('--no-tensorrt', help='do not use the TensorRT backend even if installed', dest='no_tensorrt', action='store_true')
     program.add_argument('--enhancer-alignment', help='face crop used by the enhancers', dest='enhancer_alignment', default='legacy', choices=['legacy', 'model'])
     program.add_argument('--face-swapper-model', help='face swap model', dest='face_swapper_model', default=DEFAULT_SWAPPER_KEY, choices=SWAPPER_KEYS)
     program.add_argument('--keep-fps', help='keep original fps', dest='keep_fps', action='store_true', default=False)
@@ -106,6 +107,8 @@ def parse_args() -> None:
     modules.globals.face_swapper_model = args.face_swapper_model
     modules.globals.enhancer_alignment = args.enhancer_alignment
     modules.globals.occlusion_mask = args.occlusion_mask
+    if args.no_tensorrt:
+        modules.globals.tensorrt = False
     if args.calibration_profile:
         from modules import calibration
 

@@ -155,5 +155,11 @@
     "Live swaps your webcam; Photo / Video processes a file": "Live — подмена с веб-камеры; Фото / Видео — обработка файла",
     "Pick a source face, choose the camera and press Live. Calibrate once for your own face.": "Выберите исходное лицо, камеру и нажмите Live. Один раз откалибруйтесь под своё лицо.",
     "Could not read the target — unsupported file or codec.": "Не удалось прочитать цель — неподдерживаемый файл или кодек.",
-    "No face in the selected source image.": "На исходном изображении нет лица."
+    "No face in the selected source image.": "На исходном изображении нет лица.",
+    "Backend:": "Бэкенд:",
+    "TensorRT (fastest)": "TensorRT (быстрее всего)",
+    "CUDA graph": "CUDA-граф",
+    "TensorRT compiles each model into one engine — 2-3x faster; the first use of a model builds it (up to a minute)": "TensorRT компилирует каждую модель в один движок — в 2-3 раза быстрее; при первом использовании модели он собирается (до минуты)",
+    "TensorRT runtime not installed — run install-tensorrt.bat": "Рантайм TensorRT не установлен — запустите install-tensorrt.bat",
+    "Backend: {backend}. Models reload on next use; restart Live to apply.": "Бэкенд: {backend}. Модели перезагрузятся при следующем использовании; перезапустите Live."
 }

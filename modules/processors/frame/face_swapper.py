@@ -413,7 +413,14 @@ def get_face_swapper() -> Any:
 
             update_status(f"Loading face swapper model from: {model_path}", NAME)
             try:
+                from modules.providers import make_session, tensorrt_providers
+
                 providers_config = _build_providers_config()
+                use_trt = make_session(model_path, "Inswapper-128") is not None
+                if use_trt:
+                    # insightface builds its own session; hand it the same
+                    # providers so the cached engine is reused.
+                    providers_config = tensorrt_providers()
                 FACE_SWAPPER = insightface.model_zoo.get_model(
                     model_path,
                     providers=providers_config,
@@ -421,7 +428,7 @@ def get_face_swapper() -> Any:
                 # Set up CUDA graph session for faster inference.  Gated on
                 # the provider actually in use — torch is not a dependency
                 # of this path and its absence must not cost the graph.
-                if any(
+                if not use_trt and any(
                     p == "CUDAExecutionProvider" or
                     (isinstance(p, tuple) and p[0] == "CUDAExecutionProvider")
                     for p in providers_config

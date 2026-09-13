@@ -41,7 +41,13 @@ class OnnxSwapper:
             (isinstance(p, tuple) and p[0] == "CUDAExecutionProvider")
             for p in providers
         )
-        if not (wants_cuda and self._init_cuda_graph(model_path)):
+        from modules.providers import make_session
+
+        trt_session = make_session(model_path, spec.label)
+        if trt_session is not None:
+            self.session = trt_session
+            self._read_io_names()
+        elif not (wants_cuda and self._init_cuda_graph(model_path)):
             session_options = onnxruntime.SessionOptions()
             session_options.graph_optimization_level = (
                 onnxruntime.GraphOptimizationLevel.ORT_ENABLE_ALL

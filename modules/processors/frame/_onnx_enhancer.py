@@ -218,6 +218,11 @@ def create_onnx_session(model_path: str) -> onnxruntime.InferenceSession:
         model_path = optimize_for_coreml(model_path, input_shape=input_shape)
 
     providers = build_provider_config()
+    from modules.providers import make_session
+
+    trt_session = make_session(model_path)
+    if trt_session is not None:
+        return trt_session
     graph_session = _graph_session(model_path, providers)
     if graph_session is not None:
         return graph_session

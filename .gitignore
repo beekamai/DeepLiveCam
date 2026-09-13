@@ -38,3 +38,4 @@ media/*
 !media/streamers.gif
 !media/ui_live.png
 !media/ui_media.png
+onnxruntime_profile__*.json
