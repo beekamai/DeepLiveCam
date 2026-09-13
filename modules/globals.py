@@ -23,6 +23,8 @@ simple_map: Dict[str, Any] = {}             # Stores simplified map (embeddings/
 
 # Paths
 source_path: str | None = None
+# Every accepted source photo; source_path mirrors the first one.
+source_paths: list = []
 target_path: str | None = None
 output_path: str | None = None
 

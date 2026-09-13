@@ -174,5 +174,10 @@
     "Live start cancelled.": "Запуск Live отменён.",
     "Loading models...": "Загрузка моделей...",
     "Could not load the models — see the console for the error.": "Не удалось загрузить модели — ошибка в консоли.",
-    "The camera stopped delivering frames — another application may have taken it.": "Камера перестала отдавать кадры — возможно, её заняло другое приложение."
+    "The camera stopped delivering frames — another application may have taken it.": "Камера перестала отдавать кадры — возможно, её заняло другое приложение.",
+    "Choose the source face — pick several photos of the same person (front, turned, up, down) and they are blended by pose": "Выберите исходное лицо — можно несколько фото одного человека (анфас, в повороте, сверху, снизу), они смешиваются по позе",
+    "Select one or more photos of the source face": "Выберите одно или несколько фото исходного лица",
+    "{n} photos, blended by pose": "{n} фото, смешиваются по позе",
+    "Swap works with a single source photo.": "Обмен местами работает с одним фото источника.",
+    "None of the chosen photos shows a face — keeping the previous face.": "Ни на одном из выбранных фото нет лица — оставляю прежнее."
 }

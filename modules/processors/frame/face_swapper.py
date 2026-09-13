@@ -10,6 +10,7 @@ import modules.processors.frame.core
 from modules import imread_unicode, imwrite_unicode
 from modules.core import update_status
 from modules.face_analyser import get_one_face, get_many_faces, default_source_face
+from modules.source_identity import SourceIdentity
 from modules.typing import Face, Frame
 from modules.utilities import (
     is_image,
@@ -681,6 +682,9 @@ def swap_face(source_face: Face, target_face: Face, temp_frame: Frame) -> Frame:
     if needs_source_face():
         if source_face is None:
             return temp_frame
+        if isinstance(source_face, SourceIdentity):
+            # Several photos of the person: blend the embedding for this pose.
+            source_face = source_face.face_for(target_face)
         if not hasattr(source_face, 'normed_embedding') or source_face.normed_embedding is None:
             return temp_frame
 
@@ -1184,17 +1188,14 @@ def process_frames(
             # Log the error but allow proceeding; subsequent check will stop processing.
         else:
             try:
-                source_img = imread_unicode(source_path)
-                if source_img is None:
-                    # Specific error for file reading failure
-                    update_status(f"Error reading source image file {source_path}. Please check the path and file integrity.", NAME)
-                else:
-                    source_face = get_one_face(source_img)
-                    if source_face is None:
-                        # Specific message for no face detected after successful read
-                        update_status(f"Warning: Successfully read source image {source_path}, but no face was detected. Swaps will be skipped.", NAME)
-                    # Free memory immediately after extracting face
-                    del source_img
+                from modules import source_identity
+
+                paths = source_identity.current_paths() or [source_path]
+                source_face, skipped = source_identity.load(paths)
+                for path in skipped:
+                    update_status(f"Warning: no face in source image {path}; skipped.", NAME)
+                if source_face is None:
+                    update_status(f"Error: no usable source image among {paths}. Swaps will be skipped.", NAME)
             except Exception as e:
                 # Print the specific exception caught
                 import traceback
@@ -1315,13 +1316,14 @@ def process_image(source_path: str, target_path: str, output_path: str) -> None:
 
         else: # Simple mode
             try:
-                source_img = imread_unicode(source_path)
-                if source_img is None:
-                    update_status(f"Error: Could not read source image: {source_path}", NAME)
-                    return
-                source_face = get_one_face(source_img)
-                if not source_face:
-                    update_status(f"Error: No face found in source image: {source_path}", NAME)
+                from modules import source_identity
+
+                paths = source_identity.current_paths() or [source_path]
+                source_face, skipped = source_identity.load(paths)
+                for path in skipped:
+                    update_status(f"Warning: no face in source image {path}; skipped.", NAME)
+                if source_face is None:
+                    update_status(f"Error: no usable source image among {paths}", NAME)
                     return
             except Exception as src_e:
                  update_status(f"Error reading or analyzing source image {source_path}: {src_e}", NAME)

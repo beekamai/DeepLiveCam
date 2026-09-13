@@ -56,6 +56,7 @@ from PySide6.QtWidgets import (
 )
 
 import modules.globals
+from modules import source_identity
 from modules import calibration
 from modules import enhancer_registry
 from modules import swapper_registry
@@ -349,35 +350,27 @@ def render_video_preview(
 # ─── persistence ─────────────────────────────────────────────────────────
 
 
-def _accept_source_path(path: str) -> bool:
-    """Adopt ``path`` as the source face only if a face can be read from it.
+def _accept_source_paths(paths: List[str]) -> bool:
+    """Adopt ``paths`` as the source photos, keeping only those with a face.
 
-    A photo the analyser finds nothing in would otherwise replace a working
-    source and silently stop the swap, so a rejected pick leaves the previous
-    face in place.
+    Several photos of one person are blended by pose (see
+    ``modules/source_identity.py``).  A pick with no usable photo leaves the
+    previous face in place instead of silently stopping the swap.
     """
-    from modules import imread_unicode
-    from modules.face_analyser import get_one_face
+    from modules import source_identity
 
-    image = imread_unicode(path)
-    if image is None:
-        update_status(f"Could not read {os.path.basename(path)} — keeping the previous face.")
+    identity, skipped = source_identity.load(paths)
+    for path in skipped:
+        update_status(f"No face found in {os.path.basename(path)} — skipped.")
+    if identity is None:
+        update_status("None of the chosen photos shows a face — keeping the previous face.")
         return False
-
-    try:
-        face = get_one_face(image)
-    except Exception as error:
-        update_status(f"Could not analyse {os.path.basename(path)} ({error}) — "
-                      "keeping the previous face.")
-        return False
-
-    if face is None:
-        update_status(f"No face found in {os.path.basename(path)} — "
-                      "keeping the previous face.")
-        return False
-
-    modules.globals.source_path = path
+    source_identity.set_paths(identity.paths)
     return True
+
+
+def _accept_source_path(path: str) -> bool:
+    return _accept_source_paths([path])
 
 
 def _preload_live_models() -> None:
@@ -776,7 +769,7 @@ class MainWindow(QMainWindow):
         """Re-render the source/target thumbnails at the current size."""
         source = modules.globals.source_path
         if source and is_image(source):
-            self.source_label.setPixmap(render_image_preview(source, self._preview_size))
+            self._show_source()
         target = modules.globals.target_path
         if target and is_image(target):
             self.target_label.setPixmap(render_image_preview(target, self._preview_size))
@@ -826,10 +819,15 @@ class MainWindow(QMainWindow):
         col = QVBoxLayout()
         self.source_label = _make_image_drop(_("Source face"), self._preview_size)
         col.addWidget(self.source_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.source_caption = QLabel("")
+        self.source_caption.setObjectName("statusLabel")
+        self.source_caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        col.addWidget(self.source_caption)
         row = QHBoxLayout()
         self.btn_select_source = QPushButton(_("Select a face"))
         self.btn_select_source.setToolTip(
-            _("Choose the source face image to swap onto the target")
+            _("Choose the source face — pick several photos of the same person "
+              "(front, turned, up, down) and they are blended by pose")
         )
         self.btn_select_source.clicked.connect(self._on_select_source)
         self.btn_random_face = QPushButton("⟳")
@@ -1308,21 +1306,34 @@ class MainWindow(QMainWindow):
         global _RECENT_SOURCE_DIR
         if _PREVIEW is not None:
             _PREVIEW.hide()
-        path, _filter = QFileDialog.getOpenFileName(
-            self, _("select an source image"),
+        paths, _filter = QFileDialog.getOpenFileNames(
+            self, _("Select one or more photos of the source face"),
             _RECENT_SOURCE_DIR or "",
             _IMAGE_FILE_FILTER,
         )
-        if not path:
+        paths = [p for p in paths if is_image(p)]
+        if not paths:
             return
-        if not is_image(path) or not _accept_source_path(path):
+        if not _accept_source_paths(paths):
             if modules.globals.source_path is None:
                 self.source_label.clear()
                 self.source_label.setText(_("Source face"))
             return
-        _RECENT_SOURCE_DIR = os.path.dirname(path)
-        self.source_label.setPixmap(render_image_preview(path, self._preview_size))
+        _RECENT_SOURCE_DIR = os.path.dirname(paths[0])
+        self._show_source()
+
+    def _show_source(self) -> None:
+        paths = modules.globals.source_paths or (
+            [modules.globals.source_path] if modules.globals.source_path else [])
+        if not paths:
+            self.source_label.clear()
+            self.source_label.setText(_("Source face"))
+            self.source_caption.setText("")
+            return
+        self.source_label.setPixmap(render_image_preview(paths[0], self._preview_size))
         self.source_label.setText("")
+        self.source_caption.setText(
+            _("{n} photos, blended by pose").format(n=len(paths)) if len(paths) > 1 else "")
 
     def _on_select_target(self) -> None:
         global _RECENT_TARGET_DIR
@@ -1367,8 +1378,7 @@ class MainWindow(QMainWindow):
                 f.write(response.content)
             if not _accept_source_path(temp_path):
                 return
-            self.source_label.setPixmap(render_image_preview(temp_path, self._preview_size))
-            self.source_label.setText("")
+            self._show_source()
         except Exception as exc:
             print(f"Failed to fetch random face: {exc}")
 
@@ -1378,7 +1388,11 @@ class MainWindow(QMainWindow):
         tp = modules.globals.target_path
         if not (sp and tp and is_image(sp) and is_image(tp)):
             return
+        if len(modules.globals.source_paths) > 1:
+            update_status("Swap works with a single source photo.")
+            return
         modules.globals.source_path, modules.globals.target_path = tp, sp
+        modules.globals.source_paths = [tp]
         _RECENT_SOURCE_DIR = os.path.dirname(tp)
         _RECENT_TARGET_DIR = os.path.dirname(sp)
         if _PREVIEW is not None:
@@ -1686,7 +1700,9 @@ class PreviewWindow(QWidget):
             return
         source_face = None
         if needs_source_face():
-            source_face = get_one_face(imread_unicode(modules.globals.source_path))
+            from modules import source_identity
+
+            source_face, _skipped = source_identity.load()
             if source_face is None:
                 update_status("No face in the selected source image.")
                 return
@@ -1850,15 +1866,12 @@ class _ProcessingWorker(QThread):
             detected_now = False
 
             if not modules.globals.map_faces:
-                if (
-                    modules.globals.source_path
-                    and modules.globals.source_path != last_source_path
-                ):
-                    last_source_path = modules.globals.source_path
-                    new_source = imread_unicode(modules.globals.source_path)
-                    new_face = None if new_source is None else get_one_face(new_source)
-                    if new_face is not None:
-                        source_image = new_face
+                paths = tuple(source_identity.current_paths())
+                if paths and paths != last_source_path:
+                    last_source_path = paths
+                    identity, _skipped = source_identity.load(paths)
+                    if identity is not None:
+                        source_image = identity
                     elif source_image is None:
                         update_status("No face in the selected source image.")
                     else:

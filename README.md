@@ -23,6 +23,7 @@ A fork of [Deep-Live-Cam](https://github.com/hacksider/Deep-Live-Cam) built arou
 
 ### Features
 
+- 🖼️ **Several photos of one person** as the source — front, turned, up, down: their embeddings are blended by the target's pose, so the identity stays steady and turned faces get the photo taken at that angle (`docs/source-identity.md`)
 - ⚡ **CUDA-graph inference** for the detector, landmarks, swappers and enhancers; the XSeg occluder rebuilt for the GPU (8× faster than the stock graph)
 - 🎯 **Optical-flow tracking** between detections: forty support points over the whole head, forward-backward check, RANSAC — a hand or a mic does not bend the alignment; the face is carried for a second after the detector loses it (deep turn) and fades out instead of cutting
 - 🧭 **Calibration** — one minute in front of the camera: your face outline at five poses, an expression-proof crop (pursed or smiling lips no longer shrink the swap), and a fade to your real face *beyond* the turns you chose
@@ -95,14 +96,14 @@ python run.py --execution-provider cuda        # coreml on Apple Silicon, cpu wi
 - **`Could not open the camera`** — another app holds it (Camo Studio, a browser tab, Discord). Close it or pick another camera. Calibration and Live cannot run at the same time; opening one closes the other.
 - **Low FPS with the GPU busy** — the swap models are hundreds of tiny GPU kernels; the app is launch-bound, not compute-bound. Install TensorRT (step 7) — it fuses each model into one engine; prefer HyperSwap 1b over Inswapper (same cost, 4× the pixels); close other GPU users (browsers with hardware acceleration, Discord overlay).
 - **Activity bar under the status line on first Live after installing TensorRT** — engines are being built (the status line says which model); it happens once per model. The window stays responsive: the Live button turns into *Loading… (click to cancel)*, and changing a model during Live reloads it in the background while the last swapped face stays on screen.
-- **`No face in the selected source image`** — the source photo must show one clear, roughly frontal face.
+- **`No face in the selected source image`** — the source photo must show one clear face; with several photos the ones without a face are skipped and reported.
 - **Swap shows the bare face on turns** — recalibrate (Motion → Calibrate…) and turn *as far as the swap should still hold*; the fade begins beyond that.
 - **Video output fails** — ffmpeg is not on `PATH`; see step 4.
 </details>
 
 ### Using it
 
-**Live**: pick a source face → choose the camera → **Live**. Stream the preview window with OBS (Window Capture) or point a virtual camera at it.
+**Live**: pick a source face (select several photos of the same person at once to blend them by pose) → choose the camera → **Live**. Stream the preview window with OBS (Window Capture) or point a virtual camera at it.
 
 **Calibrate…** (Live tab or Motion → Calibration): press **Start**, hold each pose when asked — straight, then the furthest left / right / up / down at which the swap should *still* hold — and save. Tones mark the countdown, each capture and the end, and *Voice prompts* (English, system voice) say which way to turn, so you need not watch the screen. The profile lives in `calibration/` and is remembered.
 
@@ -188,6 +189,7 @@ AGPL-3.0, as upstream. Models keep their own licences.
 
 ### Возможности
 
+- 🖼️ **Несколько фото одного человека** как источник — анфас, в повороте, сверху, снизу: их эмбеддинги смешиваются по позе цели, идентичность держится ровнее, а повёрнутое лицо получает фото под этим углом (`docs/source-identity.md`)
 - ⚡ **CUDA-графы** для детектора, точек, свапперов и улучшателей; окклюдер XSeg пересобран под GPU (в 8 раз быстрее исходного графа)
 - 🎯 **Трекинг оптическим потоком** между детекциями: сорок опорных точек по всей голове, прямая-обратная проверка, RANSAC — рука или микрофон не искривляют выравнивание; после потери детекции (сильный поворот) лицо ведётся ещё секунду и гаснет, а не обрывается
 - 🧭 **Калибровка** — минута перед камерой: контур лица в пяти позах, кроп, устойчивый к мимике (трубочка или улыбка больше не сжимают подмену), и затухание к своему лицу *за* выбранными вами поворотами
@@ -260,14 +262,14 @@ python run.py --execution-provider cuda        # coreml на Apple Silicon, cpu 
 - **`Could not open the camera`** — камеру держит другое приложение (Camo Studio, вкладка браузера, Discord). Закройте его или выберите другую камеру. Калибровка и Live не работают одновременно: открытие одного закрывает другое.
 - **Низкий FPS при занятом GPU** — модели подмены состоят из сотен крошечных GPU-ядер, приложение упирается в их запуск, а не в вычисления. Поставьте TensorRT (шаг 7) — он сплавляет каждую модель в один движок; берите HyperSwap 1b вместо Inswapper (та же цена, в 4 раза больше пикселей); закрывайте других потребителей GPU (браузеры с аппаратным ускорением, оверлей Discord).
 - **Полоска активности под строкой статуса при первом Live после установки TensorRT** — собираются движки (в строке статуса видно, какая модель); это один раз на модель. Окно остаётся живым: кнопка Live превращается в *Загрузка… (нажмите, чтобы отменить)*, а смена модели во время Live перегружает её в фоне, пока на экране держится последнее подменённое лицо.
-- **`No face in the selected source image`** — на исходном фото должно быть одно чёткое, примерно фронтальное лицо.
+- **`No face in the selected source image`** — на исходном фото должно быть одно чёткое лицо; при нескольких фото те, где лица нет, пропускаются с сообщением.
 - **На поворотах видно своё лицо** — перекалибруйтесь (Движение → Калибровка…) и поворачивайтесь *до предела, где подмена ещё должна держаться*; затухание начинается за ним.
 - **Не сохраняется видео** — ffmpeg нет в `PATH`; см. шаг 4.
 </details>
 
 ### Как пользоваться
 
-**Live**: выберите исходное лицо → камеру → **Live**. Окно превью захватывайте в OBS (Window Capture) или подавайте в виртуальную камеру.
+**Live**: выберите исходное лицо (можно сразу несколько фото одного человека, они смешаются по позе) → камеру → **Live**. Окно превью захватывайте в OBS (Window Capture) или подавайте в виртуальную камеру.
 
 **Калибровка…** (вкладка Live или Движение → Калибровка): нажмите **Старт**, держите каждую позу по запросу — прямо, затем максимально влево / вправо / вверх / вниз, где подмена ещё *должна* держаться, — и сохраните. Отсчёт, каждый захват и финал отмечаются сигналами, а *Голосовые подсказки* (английский, системный голос) говорят, куда поворачивать, — на экран смотреть не обязательно. Профиль лежит в `calibration/` и запоминается.
 

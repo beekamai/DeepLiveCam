@@ -78,6 +78,7 @@ def parse_args() -> None:
     args = program.parse_args()
 
     modules.globals.source_path = args.source_path
+    modules.globals.source_paths = [args.source_path] if args.source_path else []
     modules.globals.target_path = args.target_path
     modules.globals.output_path = normalize_output_path(modules.globals.source_path, modules.globals.target_path, args.output_path)
     modules.globals.frame_processors = args.frame_processor
