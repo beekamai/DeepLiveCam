@@ -35,6 +35,8 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
+    QSpinBox,
+    QInputDialog,
     QProgressBar,
     QApplication,
     QCheckBox,
@@ -363,9 +365,30 @@ def _accept_source_paths(paths: List[str]) -> bool:
     ``modules/source_identity.py``).  A pick with no usable photo leaves the
     previous face in place instead of silently stopping the swap.
     """
-    from modules import source_identity
+    from modules import imread_unicode, source_identity
+    from modules.face_analyser import get_many_faces
 
-    identity, skipped = source_identity.load(paths)
+    picks = dict(getattr(modules.globals, "source_picks", {}) or {})
+    chosen = []
+    for path in paths:
+        if path in picks:
+            chosen.append(path)
+            continue
+        image = imread_unicode(path)
+        faces = [] if image is None else (get_many_faces(image) or [])
+        if len(faces) > 1 and _MAIN is not None and _APP is not None:
+            # Several people in the photo: ask which one is the source.
+            from modules.ui_face_picker import FacePickerDialog
+
+            dialog = FacePickerDialog(image, faces, parent=_MAIN)
+            if dialog.exec() and dialog.chosen is not None:
+                picks[path] = list(dialog.chosen)
+            else:
+                update_status(f"{os.path.basename(path)} skipped — no face chosen.")
+                continue
+        chosen.append(path)
+    modules.globals.source_picks = picks
+    identity, skipped = source_identity.load(chosen)
     for path in skipped:
         update_status(f"No face found in {os.path.basename(path)} — skipped.")
     if identity is None:
@@ -469,6 +492,7 @@ def save_switch_states():
         "mask_chin": modules.globals.mask_chin,
         "gpu_device": modules.globals.gpu_device,
         "camera_resolution": modules.globals.camera_resolution,
+        "face_fader_seconds": modules.globals.face_fader_seconds,
         "head_outline": modules.globals.head_outline,
         "head_yaw_limit": modules.globals.head_yaw_limit,
         "head_pitch_limit": modules.globals.head_pitch_limit,
@@ -535,6 +559,7 @@ def load_switch_states():
         modules.globals.gpu_device = max(0, int(state.get("gpu_device", 0)))
         if state.get("camera_resolution") in RESOLUTIONS:
             modules.globals.camera_resolution = state["camera_resolution"]
+        modules.globals.face_fader_seconds = max(1, min(60, int(state.get("face_fader_seconds", 5))))
         if modules.globals.mouth_reveal_mode not in ("region", "lips"):
             modules.globals.mouth_reveal_mode = "region"
         modules.globals.head_outline = state.get("head_outline", True)
@@ -695,6 +720,9 @@ class MainWindow(QMainWindow):
         self._start_cb = start_cb
         self._destroy_cb = destroy_cb
         self._loader: Optional[_ModelLoader] = None
+        self._fader_timer = QTimer(self)
+        self._fader_timer.setInterval(33)
+        self._fader_timer.timeout.connect(self._fader_step)
 
         self.setWindowTitle(
             f"{modules.metadata.name} {modules.metadata.version} {modules.metadata.edition}"
@@ -868,8 +896,84 @@ class MainWindow(QMainWindow):
         row.addWidget(self.btn_select_source)
         row.addWidget(self.btn_random_face)
         col.addLayout(row)
+
+        lib_row = QHBoxLayout()
+        self.cb_library = QComboBox()
+        self.cb_library.setToolTip(_("Saved source sets — pick one to load its photos"))
+        self._refresh_library()
+        self.cb_library.currentTextChanged.connect(self._on_library_pick)
+        lib_row.addWidget(self.cb_library, 1)
+        self.btn_library_save = QPushButton("★")
+        self.btn_library_save.setObjectName("secondary")
+        self.btn_library_save.setFixedWidth(40)
+        self.btn_library_save.setToolTip(_("Save the current source photos to the library"))
+        self.btn_library_save.clicked.connect(self._on_library_save)
+        lib_row.addWidget(self.btn_library_save)
+        self.btn_library_delete = QPushButton("✕")
+        self.btn_library_delete.setObjectName("secondary")
+        self.btn_library_delete.setFixedWidth(40)
+        self.btn_library_delete.setToolTip(_("Remove the selected set from the library"))
+        self.btn_library_delete.clicked.connect(self._on_library_delete)
+        lib_row.addWidget(self.btn_library_delete)
+        col.addLayout(lib_row)
         col.addStretch(1)
         return col
+
+    # ── library (saved source sets) ──────────────────────────────────────
+
+    def _refresh_library(self) -> None:
+        from modules import library
+
+        self.cb_library.blockSignals(True)
+        self.cb_library.clear()
+        self.cb_library.addItem(_("Library…"))
+        self.cb_library.addItems(library.names())
+        self.cb_library.blockSignals(False)
+
+    def _on_library_pick(self, name: str) -> None:
+        from modules import library, source_identity
+
+        if self.cb_library.currentIndex() <= 0:
+            return
+        entry = library.load(name)
+        if entry is None:
+            update_status(f"Library set {name} has no readable photos.")
+            return
+        modules.globals.source_picks = entry["picks"]
+        identity, _skipped = source_identity.load(entry["paths"])
+        if identity is None:
+            update_status(f"No face in the photos of {name}.")
+            return
+        source_identity.set_paths(identity.paths)
+        self._show_source()
+        update_status(f"Source: {name}")
+
+    def _on_library_save(self) -> None:
+        from modules import library
+
+        paths = modules.globals.source_paths or (
+            [modules.globals.source_path] if modules.globals.source_path else [])
+        if not paths:
+            update_status("Select a source face first.")
+            return
+        default = os.path.splitext(os.path.basename(paths[0]))[0]
+        name, ok = QInputDialog.getText(self, _("Save to library"), _("Name for this source set:"), text=default)
+        if not ok or not name.strip():
+            return
+        library.save(name, paths, modules.globals.source_picks)
+        self._refresh_library()
+        self.cb_library.setCurrentText(name.strip())
+        update_status(f"Saved {name.strip()} to the library.")
+
+    def _on_library_delete(self) -> None:
+        from modules import library
+
+        if self.cb_library.currentIndex() <= 0:
+            return
+        name = self.cb_library.currentText()
+        library.delete(name)
+        self._refresh_library()
+        update_status(f"Removed {name} from the library.")
 
     # ── live page: camera, Live, Calibrate ───────────────────────────────
 
@@ -925,8 +1029,55 @@ class MainWindow(QMainWindow):
         buttons.addWidget(self.btn_live, 2)
         buttons.addWidget(self.btn_calibrate_quick, 1)
         layout.addLayout(buttons)
+
+        fader = QHBoxLayout()
+        self.btn_fader = QPushButton(_("Face fader"))
+        self.btn_fader.setObjectName("secondary")
+        self.btn_fader.setToolTip(_("Fade the swap in (or back out) gradually while streaming"))
+        self.btn_fader.clicked.connect(self._on_face_fader)
+        fader.addWidget(self.btn_fader, 2)
+        self.sb_fader = QSpinBox()
+        self.sb_fader.setRange(1, 60)
+        self.sb_fader.setSuffix(" s")
+        self.sb_fader.setValue(modules.globals.face_fader_seconds)
+        self.sb_fader.setToolTip(_("How long the fade takes"))
+        self.sb_fader.valueChanged.connect(self._on_fader_seconds)
+        fader.addWidget(self.sb_fader, 1)
+        layout.addLayout(fader)
         layout.addStretch(1)
         return page
+
+    # ── face fader ───────────────────────────────────────────────────────
+
+    def _on_fader_seconds(self, value: int) -> None:
+        modules.globals.face_fader_seconds = int(value)
+        save_switch_states()
+
+    def _on_face_fader(self) -> None:
+        if self._fader_timer.isActive():
+            self._fader_timer.stop()
+            self.btn_fader.setText(_("Face fader"))
+            return
+        start = float(modules.globals.opacity)
+        self._fader_target = 0.0 if start > 0.5 else 1.0
+        self._fader_from = start
+        self._fader_t0 = time.perf_counter()
+        modules.globals.face_swapper_enabled = True
+        self.btn_fader.setText(_("Stop fade"))
+        self._fader_timer.start()
+
+    def _fader_step(self) -> None:
+        span = max(0.2, float(modules.globals.face_fader_seconds))
+        k = min(1.0, (time.perf_counter() - self._fader_t0) / span)
+        value = self._fader_from + (self._fader_target - self._fader_from) * k
+        modules.globals.opacity = value
+        self.s_transparency.blockSignals(True)
+        self.s_transparency.setValue(int(round(value * 100)))
+        self.s_transparency.blockSignals(False)
+        if k >= 1.0:
+            self._fader_timer.stop()
+            self.btn_fader.setText(_("Face fader"))
+            self._on_transparency_change(self._fader_target)
 
     # ── photo / video page: target, Start, Preview, output options ───────
 

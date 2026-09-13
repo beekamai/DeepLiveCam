@@ -8,7 +8,7 @@
     "select a target image": "выберите целевое изображение",
     "source": "источник",
     "Select a target": "Выбрать цель",
-    "Select a face": "Выбрать лицо",
+    "Select a face": "Выберите лицо",
     "Keep audio": "Сохранять звук",
     "Face Enhancer": "Улучшение лица",
     "Many faces": "Все лица",
@@ -202,5 +202,18 @@
     "Which GPU runs the models — takes effect after a restart": "На какой видеокарте работают модели — применяется после перезапуска",
     "GPU changed — restart the application to apply.": "Видеокарта изменена — перезапустите приложение.",
     "Resolution:": "Разрешение:",
-    "Camera capture size: lower is faster, higher is sharper": "Размер захвата камеры: меньше — быстрее, больше — чётче"
+    "Camera capture size: lower is faster, higher is sharper": "Размер захвата камеры: меньше — быстрее, больше — чётче",
+    "Several faces found. Click the one to use, then press Use.": "Найдено несколько лиц. Кликните нужное и нажмите «Использовать».",
+    "Use": "Использовать",
+    "Saved source sets — pick one to load its photos": "Сохранённые наборы источника — выберите, чтобы загрузить его фото",
+    "Save the current source photos to the library": "Сохранить текущие фото источника в библиотеку",
+    "Remove the selected set from the library": "Удалить выбранный набор из библиотеки",
+    "Library…": "Библиотека…",
+    "Save to library": "Сохранить в библиотеку",
+    "Name for this source set:": "Имя для этого набора:",
+    "Select a source face first.": "Сначала выберите исходное лицо.",
+    "Face fader": "Плавная подмена",
+    "Fade the swap in (or back out) gradually while streaming": "Плавно включить подмену (или так же плавно убрать) во время стрима",
+    "How long the fade takes": "Сколько длится переход",
+    "Stop fade": "Остановить"
 }

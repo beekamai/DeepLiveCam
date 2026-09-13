@@ -21,7 +21,7 @@ import numpy as np
 import modules.globals
 from modules import imread_unicode
 from modules.calibration import pose_proxies
-from modules.face_analyser import get_one_face
+from modules.face_analyser import get_many_faces
 
 # Width of the pose kernel in pose-proxy units (same scale as the
 # calibration references) and the share every photo keeps regardless of pose.
@@ -85,6 +85,24 @@ def set_paths(paths: Sequence[str]) -> None:
     because the rest of the code checks it for "is a source selected"."""
     modules.globals.source_paths = list(paths)
     modules.globals.source_path = paths[0] if paths else None
+    picks = getattr(modules.globals, "source_picks", {}) or {}
+    modules.globals.source_picks = {p: pt for p, pt in picks.items() if p in paths}
+
+
+def pick_face(faces: Sequence[Any], path: str) -> Optional[Any]:
+    """The face chosen for ``path`` in the picker, else the leftmost one
+    (what ``get_one_face`` returns)."""
+    faces = [f for f in (faces or []) if f is not None]
+    if not faces:
+        return None
+    pick = (getattr(modules.globals, "source_picks", {}) or {}).get(path)
+    if pick is not None:
+        x, y = pick
+        inside = [f for f in faces if f.bbox[0] <= x <= f.bbox[2] and f.bbox[1] <= y <= f.bbox[3]]
+        if inside:
+            return min(inside, key=lambda f: ((f.bbox[0] + f.bbox[2]) / 2 - x) ** 2
+                       + ((f.bbox[1] + f.bbox[3]) / 2 - y) ** 2)
+    return min(faces, key=lambda f: f.bbox[0])
 
 
 def load(paths: Optional[Sequence[str]] = None) -> Tuple[Optional[SourceIdentity], List[str]]:
@@ -97,7 +115,7 @@ def load(paths: Optional[Sequence[str]] = None) -> Tuple[Optional[SourceIdentity
         face = None
         if image is not None:
             try:
-                face = get_one_face(image)
+                face = pick_face(get_many_faces(image), path)
             except Exception as error:
                 print(f"[source] could not analyse {path}: {error}")
         if face is None or getattr(face, "embedding", None) is None:

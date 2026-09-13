@@ -39,3 +39,4 @@ media/*
 !media/ui_live.png
 !media/ui_media.png
 onnxruntime_profile__*.json
+library.json

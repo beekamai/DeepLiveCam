@@ -25,6 +25,10 @@ simple_map: Dict[str, Any] = {}             # Stores simplified map (embeddings/
 source_path: str | None = None
 # Every accepted source photo; source_path mirrors the first one.
 source_paths: list = []
+# For photos with several faces: path -> (x, y) centre of the chosen face.
+source_picks: dict = {}
+# Face fader: seconds for the swap to fade in or out.
+face_fader_seconds: int = 5
 target_path: str | None = None
 output_path: str | None = None
 
