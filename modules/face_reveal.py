@@ -120,12 +120,18 @@ def eye_reveal_mask(face: Any, affine: np.ndarray, size: int) -> Optional[np.nda
     return 1.0 - mask
 
 
-def mouth_polygon(face: Any, affine: np.ndarray, strength: float) -> Optional[np.ndarray]:
+def mouth_polygon(face: Any, affine: np.ndarray, strength: float,
+                  mode: str = "region") -> Optional[np.ndarray]:
     """Outline of the revealed mouth region in aligned-crop space.
 
-    At 0 it is the lips' own hull; as ``strength`` grows the region widens
-    and reaches up to the base of the nose and down to the chin, so what is
-    revealed is bounded by facial features rather than by a fixed offset.
+    ``region``: at 0 it is the lips' own hull; as ``strength`` grows the
+    region widens and reaches up to the base of the nose and down to the
+    chin, so what is revealed is bounded by facial features rather than by
+    a fixed offset.
+
+    ``lips``: the hull never rises above the upper lip's edge — a real
+    moustache stays covered by the swap — and grows only sideways a little
+    and downward, where a stuck-out tongue goes.
     """
     points = _crop_points(face, affine)
     if points is None:
@@ -137,9 +143,14 @@ def mouth_polygon(face: Any, affine: np.ndarray, strength: float) -> Optional[np
     top = float(mouth[:, 1].min())
     bottom = float(mouth[:, 1].max())
     s = min(max(strength, 0.0), 1.0)
-    widened = centre + (mouth - centre) * np.array([1.0 + 0.6 * s, 1.0], dtype=np.float32)
-    reach_up = top - s * 0.9 * max(top - nose_base, 0.0)
-    reach_down = bottom + s * 0.9 * max(chin - bottom, 0.0)
+    if mode == "lips":
+        widened = centre + (mouth - centre) * np.array([1.0 + 0.25 * s, 1.0], dtype=np.float32)
+        reach_up = top
+        reach_down = bottom + s * 0.6 * max(chin - bottom, 0.0)
+    else:
+        widened = centre + (mouth - centre) * np.array([1.0 + 0.6 * s, 1.0], dtype=np.float32)
+        reach_up = top - s * 0.9 * max(top - nose_base, 0.0)
+        reach_down = bottom + s * 0.9 * max(chin - bottom, 0.0)
     left = float(widened[:, 0].min())
     right = float(widened[:, 0].max())
     extra = np.array([[left, reach_up], [right, reach_up],
@@ -148,16 +159,18 @@ def mouth_polygon(face: Any, affine: np.ndarray, strength: float) -> Optional[np
 
 
 def mouth_reveal_mask(face: Any, affine: np.ndarray, size: int,
-                      strength: float) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+                      strength: float, mode: str = "region") -> Optional[Tuple[np.ndarray, np.ndarray]]:
     """Paste-alpha multiplier revealing the real mouth, plus its outline in
     crop space for the on-screen box."""
     if strength <= 0.0:
         return None
-    polygon = mouth_polygon(face, affine, strength)
+    polygon = mouth_polygon(face, affine, strength, mode)
     if polygon is None:
         return None
     mask = np.zeros((size, size), dtype=np.uint8)
     cv2.fillConvexPoly(mask, polygon.astype(np.int32), 255)
-    blur = max(3, (size // 16) | 1)
+    # A tight lips mask needs a tight feather, or the blur climbs back over
+    # the moustache it was meant to leave alone.
+    blur = max(3, (size // (32 if mode == "lips" else 16)) | 1)
     soft = cv2.GaussianBlur(mask, (blur, blur), 0).astype(np.float32) / 255.0
     return 1.0 - soft, polygon

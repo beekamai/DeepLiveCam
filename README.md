@@ -115,7 +115,7 @@ Settings tabs:
 | Tab | What lives there |
 |---|---|
 | Models | swapper, enhancer, enhancer crop, transparency, sharpness, backend (TensorRT / CUDA graph) |
-| Mask | face outline mask, occlusion mask (XSeg) and its interval, Poisson blend, mask overlay, mouth mask, real blinks, real eyes |
+| Mask | face outline mask, occlusion mask (XSeg) and its interval, Poisson blend, mask overlay, mouth mask (region or lips-only, the latter keeps a moustache swapped), real blinks, real eyes |
 | Motion | face tracking, low-latency reprojection, 3D head pose (angle limits, 3D outline), calibration profiles and their switches |
 | Output | webcam colour fix, FPS counter, mirror, **Max FPS** (cap the swap rate to spare the GPU; the preview still shows every camera frame), language, Destroy |
 
@@ -282,7 +282,7 @@ python run.py --execution-provider cuda        # coreml на Apple Silicon, cpu 
 | Вкладка | Что там |
 |---|---|
 | Модели | сваппер, улучшатель, кроп улучшателя, прозрачность, резкость, бэкенд (TensorRT / CUDA-граф) |
-| Маска | маска по контуру, маска перекрытий (XSeg) и её интервал, Poisson-смешивание, показ маски, маска рта, настоящие моргания, свои глаза |
+| Маска | маска по контуру, маска перекрытий (XSeg) и её интервал, Poisson-смешивание, показ маски, маска рта (область или только губы — второй режим не раскрывает усы), настоящие моргания, свои глаза |
 | Движение | трекинг лица, репроекция, 3D-поза головы (пороги углов, 3D-контур), профили калибровки и их переключатели |
 | Вывод | цветокоррекция веб-камеры, счётчик FPS, зеркало, **Макс. FPS** (потолок частоты подмены, чтобы разгрузить GPU; превью по-прежнему показывает каждый кадр камеры), язык, Закрыть |
 

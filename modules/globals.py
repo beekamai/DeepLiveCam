@@ -112,6 +112,10 @@ max_fps: int = 0
 # 3D head pose per frame (insightface 1k3d68): fade the swap past the real
 # angles and add the 3D silhouette to the mask outline.
 head_pose: bool = True
+# Mouth reveal shape: "region" grows from the lips to nose base / chin,
+# "lips" stays on the lips (plus a stuck-out tongue below) so a moustache
+# above the lip is never revealed.
+mouth_reveal_mode: str = "region"
 head_outline: bool = True
 head_yaw_limit: int = 55
 head_pitch_limit: int = 35

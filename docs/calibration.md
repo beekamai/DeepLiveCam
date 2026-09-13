@@ -106,7 +106,12 @@ instead of the old frame-space polygon of landmarks 52-63, which cut through
 a moustache: the region is the lips' hull, widened with the slider and
 reaching up to the base of the nose and down to the chin at 100 %, so what
 is revealed is bounded by facial features.  The yellow box while dragging is
-that region's outline.
+that region's outline.  A second mode, **Lips only**, never rises above the
+upper lip's edge — a real moustache stays swapped when the source has none —
+and grows only a little sideways and downward, where a stuck-out tongue
+goes; its feather is half as wide so the blur does not climb back over the
+moustache.  The combo next to the slider picks the mode
+(`modules.globals.mouth_reveal_mode`).
 
 ## Capture flow
 

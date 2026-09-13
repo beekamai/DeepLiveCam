@@ -780,7 +780,10 @@ def swap_face(source_face: Face, target_face: Face, temp_frame: Frame) -> Frame:
             # The real mouth (and, as the slider grows, the whole area from
             # nose to chin) shows through the swap.
             strength = float(getattr(modules.globals, "mouth_mask_size", 0.0)) / 100.0
-            revealed = mouth_reveal_mask(target_face, M, _face_size, strength)
+            revealed = mouth_reveal_mask(
+                target_face, M, _face_size, strength,
+                getattr(modules.globals, "mouth_reveal_mode", "region"),
+            )
             if revealed is not None:
                 mouth_reveal, mouth_polygon = revealed
                 occlusion = mouth_reveal if occlusion is None else occlusion * mouth_reveal

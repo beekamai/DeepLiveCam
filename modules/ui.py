@@ -262,6 +262,7 @@ QFrame#card {
 
 # ─── module-level state ───────────────────────────────────────────────────
 
+REPO_URL = "https://github.com/beekamai/DeepLiveCam"
 _APP: Optional[QApplication] = None
 _MAIN: Optional["MainWindow"] = None
 _PREVIEW: Optional["PreviewWindow"] = None
@@ -445,6 +446,7 @@ def save_switch_states():
         "mouth_mask": modules.globals.mouth_mask,
         "show_mouth_mask_box": modules.globals.show_mouth_mask_box,
         "mouth_mask_size": modules.globals.mouth_mask_size,
+        "mouth_reveal_mode": modules.globals.mouth_reveal_mode,
         "face_outline_mask": modules.globals.face_outline_mask,
         "occlusion_interval": modules.globals.occlusion_interval,
         "calibration_profile": modules.globals.calibration_profile,
@@ -518,6 +520,9 @@ def load_switch_states():
         modules.globals.tensorrt = state.get("tensorrt", True)
         modules.globals.max_fps = max(0, min(60, int(state.get("max_fps", 0))))
         modules.globals.head_pose = state.get("head_pose", True)
+        modules.globals.mouth_reveal_mode = state.get("mouth_reveal_mode", "region")
+        if modules.globals.mouth_reveal_mode not in ("region", "lips"):
+            modules.globals.mouth_reveal_mode = "region"
         modules.globals.head_outline = state.get("head_outline", True)
         modules.globals.head_yaw_limit = max(30, min(90, int(state.get("head_yaw_limit", 55))))
         modules.globals.head_pitch_limit = max(15, min(60, int(state.get("head_pitch_limit", 35))))
@@ -741,11 +746,12 @@ class MainWindow(QMainWindow):
         self._busy_depth = 0
         layout.addWidget(self._busy_bar)
 
-        footer = QLabel("Deep Live Cam")
+        footer = QLabel(f"DeepLiveCam {modules.metadata.version} · GitHub")
         footer.setObjectName("linkLabel")
         footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
         footer.setCursor(Qt.CursorShape.PointingHandCursor)
-        footer.mousePressEvent = lambda _e: webbrowser.open("https://deeplivecam.net")
+        footer.setToolTip(REPO_URL)
+        footer.mousePressEvent = lambda _e: webbrowser.open(REPO_URL)
         layout.addWidget(footer)
 
         from modules.providers import install_hint
@@ -1096,10 +1102,23 @@ class MainWindow(QMainWindow):
         self.s_mouth = self._slider(0.0, 100.0, 0.0, 1, self._on_mouth_mask_change)
         self.s_mouth.sliderPressed.connect(self._on_mouth_mask_pressed)
         self.s_mouth.sliderReleased.connect(self._on_mouth_mask_released)
+        self.cb_mouth_mode = QComboBox()
+        self._mouth_modes = {_("Region (lips to chin)"): "region", _("Lips only (keeps a moustache)"): "lips"}
+        self.cb_mouth_mode.addItems(list(self._mouth_modes))
+        for label, key in self._mouth_modes.items():
+            if key == modules.globals.mouth_reveal_mode:
+                self.cb_mouth_mode.setCurrentText(label)
+        self.cb_mouth_mode.setToolTip(_("Region grows from the lips towards the nose and chin; "
+                                        "Lips only never rises above the upper lip, so a real "
+                                        "moustache stays swapped, and grows downward for a tongue"))
+        self.cb_mouth_mode.currentTextChanged.connect(self._on_mouth_mode_change)
         self.s_mouth.setToolTip(
             _("0 = use swapped mouth, 100 = expose original mouth to chin area")
         )
-        grid.addWidget(self.s_mouth, 4, 1)
+        mouth_row = QHBoxLayout()
+        mouth_row.addWidget(self.s_mouth, 1)
+        mouth_row.addWidget(self.cb_mouth_mode)
+        grid.addLayout(mouth_row, 4, 1)
 
         self.sw_blink = self._switch(
             "blink_reveal", "Real blinks",
@@ -1349,6 +1368,9 @@ class MainWindow(QMainWindow):
         self._busy_depth = max(0, self._busy_depth + (1 if active else -1))
         if active and text:
             self._status_label.setText(text)
+        elif self._busy_depth == 0:
+            # The task is over; a stale "loading..." line would read as hung.
+            self._status_label.setText("")
         self._busy_bar.setVisible(self._busy_depth > 0)
 
     def _on_select_source(self) -> None:
@@ -1573,6 +1595,12 @@ class MainWindow(QMainWindow):
         modules.globals.mouth_mask = value > 0
         if value <= 0:
             modules.globals.show_mouth_mask_box = False
+
+    def _on_mouth_mode_change(self, label: str) -> None:
+        key = self._mouth_modes.get(label)
+        if key:
+            modules.globals.mouth_reveal_mode = key
+            save_switch_states()
 
     def _on_mouth_mask_pressed(self) -> None:
         if modules.globals.mouth_mask_size > 0:
@@ -2106,6 +2134,7 @@ class WebcamPreviewWindow(QWidget):
             f"[webcam] Camera running at {self._cap.actual_width}x"
             f"{self._cap.actual_height}@{camera_fps:.0f}fps"
         )
+        update_status("")
 
         self._capture_queue: queue.Queue = queue.Queue(maxsize=2)
         self._processed_queue: queue.Queue = queue.Queue(maxsize=2)

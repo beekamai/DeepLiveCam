@@ -189,5 +189,8 @@
     "Fade past pitch": "Гасить за наклоном",
     "Tilt (degrees) beyond which the real face shows through": "Наклон (градусы), за которым проступает настоящее лицо",
     "Loading 3D head pose model...": "Загрузка модели 3D-позы головы...",
-    "Fit 68 landmarks in 3D every frame (~3 ms): the real yaw and pitch fade the swap past the limits below, no calibration needed": "Подгонять 68 точек в 3D каждый кадр (~3 мс): реальные углы поворота и наклона гасят подмену за порогами ниже, калибровка не нужна"
+    "Fit 68 landmarks in 3D every frame (~3 ms): the real yaw and pitch fade the swap past the limits below, no calibration needed": "Подгонять 68 точек в 3D каждый кадр (~3 мс): реальные углы поворота и наклона гасят подмену за порогами ниже, калибровка не нужна",
+    "Region (lips to chin)": "Область (от губ до подбородка)",
+    "Lips only (keeps a moustache)": "Только губы (усы остаются)",
+    "Region grows from the lips towards the nose and chin; Lips only never rises above the upper lip, so a real moustache stays swapped, and grows downward for a tongue": "Область растёт от губ к носу и подбородку; «Только губы» не поднимается выше верхней губы, так что настоящие усы остаются подменёнными, и растёт вниз под высунутый язык"
 }
