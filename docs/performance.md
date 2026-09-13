@@ -54,14 +54,24 @@ The launch-bound diagnosis points straight at kernel fusion, and the ORT
 `nvinfer_10`; the runtime comes from `tensorrt-cu12-libs` on NVIDIA's own
 package index (`requirements-tensorrt.txt`, `install-tensorrt.bat`; it is
 not on PyPI, which is why it looked unavailable at first).  Whole-model
-engines, fp16, cached on disk per GPU architecture:
+engines, cached on disk per GPU architecture:
 
-| model | CUDA graph | TensorRT | engine build |
-|---|---|---|---|
-| hyperswap_1b_256 | 9.5 ms | 4.2 ms | 46 s |
-| GPEN-BFR-256 | 8.5 ms | 3.2 ms | 53 s |
-| xseg_3 | 4.7 ms | 2.1 ms | 16 s |
-| inswapper_128_fp16 | 19 ms | 5.4 ms | 30 s |
+| model | CUDA graph | TensorRT fp32 | TensorRT fp16 | fp16 error vs CUDA |
+|---|---|---|---|---|
+| hyperswap_1b_256 | 9.5 ms | 6.2 ms | **4.4 ms** | 0.2 % (used) |
+| GPEN-BFR-256 | 8.5 ms | **4.8 ms** | 3.2 ms | mean 0.06, max 1.0 on a -1..1 output |
+| xseg_3 | 4.7 ms | **4.3 ms** | 2.4 ms | mean 0.017, max 0.45 on a 0..1 mask |
+| inswapper_128_fp16 | 19 ms | **6.2 ms** | 5.8 ms | mean 0.06, max 0.41 on a 0..1 output |
+| det_10g | 12 → 6 ms (graph) | 4.1 ms | **2.5 ms** | 0.4 % (used) |
+
+Bold is what `modules/providers.py` builds.  fp16 engines of inswapper,
+GPEN and XSeg produce visible mush (the swapped face turns into blotches
+even though the numbers are finite — no NaN, just a 6 % mean error), so
+engines are fp32 unless the model is listed in `FP16_OK`, where the fp16
+output was measured against the CUDA run.  fp32 TensorRT still fuses the
+launches, which is where the time went: the full pipeline runs at 33.7 fps
+(hyperswap_1b + GPEN-256 + XSeg + landmarks) against 25.2 on CUDA graphs
+and 36.9 with everything in fp16.  Engine builds take 11-35 s per model.
 
 Gotchas met on the way: provider options must be the strings `"True"` /
 `"False"` — `"1"` makes ORT drop the provider silently and fall back to
@@ -70,7 +80,23 @@ check `make_session` does); plain `session.run` is faster than io-binding
 for TensorRT (no graph to replay).  Every session site — `GraphSession`,
 `create_onnx_session`, `OnnxSwapper`, the legacy inswapper path — asks
 `make_session` first and keeps its CUDA path as the fallback, so a missing
-runtime or a failed build costs nothing but a log line.
+runtime or a failed build costs nothing but a log line.  `make_session`
+returns a `TrtSession` proxy whose `run` takes `GRAPH_LOCK`, so TensorRT
+runs never overlap a graph replay from another thread.
+
+## Model loads belong to the processing worker
+
+Changing the swapper, enhancer or occluder while Live runs used to load
+the new model on the UI thread.  Two things went wrong with a TensorRT
+build in that window: the load ran on the GPU concurrently with the
+worker's graph replays (the hazard `_preload_live_models` describes), and
+`update_status` pumped the Qt event loop from inside `get_face_swapper`
+while it held its non-reentrant lock — a second change in the combo box
+during the 30-60 s build re-entered `release()` on the same thread and the
+app hung for good.  Now the handlers only release the old model and bump
+`settings_epoch`; the worker reloads on the next frame (it is the only GPU
+thread during Live, and the display keeps the last composed face while it
+waits), and `update_status` flushes events with `ExcludeUserInputEvents`.
 
 Levers that remain after TensorRT: the CPU milliseconds around the models
 (paste-back and mask warps are ~8 ms of the swap stage) and running XSeg

@@ -10,6 +10,10 @@ The price is a one-off engine build per model and GPU (16-60 s, cached in
 ``models/trt_cache``) and the ``tensorrt-cu12-libs`` wheel (~3.4 GB) from
 NVIDIA's index — see ``install-tensorrt.bat``.  Everything here degrades to
 the CUDA path when the runtime is missing or a build fails.
+
+Engines are built in fp32: fp16 turns inswapper, GPEN and XSeg into mush
+(mean error 0.06 on a 0-1 output against the CUDA run) and buys only
+0.5-2 ms per model.  Models measured exact in fp16 opt in via ``FP16_OK``.
 """
 
 from __future__ import annotations
@@ -23,10 +27,14 @@ from typing import Any, List, Optional
 import onnxruntime
 
 import modules.globals
+from modules.cuda_graph import GRAPH_LOCK
 
 ENGINE_CACHE = os.path.join(os.path.dirname(modules.globals.ROOT_DIR), "models", "trt_cache")
 # Workspace TensorRT may use while building; engines run within it.
 WORKSPACE_BYTES = 2 << 30
+# Model-file prefixes whose fp16 engines match the CUDA output (measured:
+# hyperswap 0.2 % relative error, the detector and landmarks 0.4 %).
+FP16_OK = ("hyperswap_", "det_10g", "2d106det")
 
 _available: Optional[bool] = None
 _supported: Optional[bool] = None
@@ -102,11 +110,12 @@ def tensorrt_wanted() -> bool:
     )
 
 
-def tensorrt_providers() -> list:
+def tensorrt_providers(model_path: str = "") -> list:
     os.makedirs(ENGINE_CACHE, exist_ok=True)
+    fp16 = os.path.basename(model_path).startswith(FP16_OK)
     return [
         ("TensorrtExecutionProvider", {
-            "trt_fp16_enable": "True",
+            "trt_fp16_enable": "True" if fp16 else "False",
             "trt_engine_cache_enable": "True",
             "trt_engine_cache_path": ENGINE_CACHE,
             "trt_timing_cache_enable": "True",
@@ -118,11 +127,31 @@ def tensorrt_providers() -> list:
     ]
 
 
+class TrtSession:
+    """An ``InferenceSession`` whose runs take the shared GPU lock.
+
+    TensorRT runs and CUDA-graph replays from different threads corrupt
+    each other (see ``cuda_graph.GRAPH_LOCK``); routing every run through
+    the same lock keeps insightface, the enhancers and the occluder safe
+    without each of them knowing which backend they got.
+    """
+
+    def __init__(self, session: Any) -> None:
+        self._session = session
+
+    def run(self, output_names, input_feed, **kwargs):
+        with GRAPH_LOCK:
+            return self._session.run(output_names, input_feed, **kwargs)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._session, name)
+
+
 def make_session(model_path: str, label: Optional[str] = None) -> Optional[Any]:
     """A session running the whole model on TensorRT, or ``None``.
 
-    The first call for a model on this GPU builds the engine; the status
-    line says so because the UI freezes for up to a minute meanwhile.
+    The first call for a model on this GPU builds the engine (up to a
+    minute); the status line says so.
     """
     if not tensorrt_wanted():
         return None
@@ -137,7 +166,7 @@ def make_session(model_path: str, label: Optional[str] = None) -> Optional[Any]:
         options = onnxruntime.SessionOptions()
         options.log_severity_level = 3
         session = onnxruntime.InferenceSession(
-            model_path, sess_options=options, providers=tensorrt_providers(),
+            model_path, sess_options=options, providers=tensorrt_providers(model_path),
         )
         if session.get_providers()[0] != "TensorrtExecutionProvider":
             print(f"[tensorrt] provider not attached for {name}; using CUDA")
@@ -150,9 +179,10 @@ def make_session(model_path: str, label: Optional[str] = None) -> Optional[Any]:
             shape = [d if isinstance(d, int) and d > 0 else 1 for d in inp.shape]
             dtype = {"tensor(float16)": np.float16, "tensor(double)": np.float64}.get(inp.type, np.float32)
             feed[inp.name] = np.zeros(shape, dtype=dtype)
-        session.run(None, feed)
+        with GRAPH_LOCK:
+            session.run(None, feed)
         print(f"[tensorrt] {name} ready")
-        return session
+        return TrtSession(session)
     except Exception as error:
         print(f"[tensorrt] {name}: {str(error)[:200]} — using CUDA")
         return None

@@ -26,6 +26,7 @@ import numpy as np
 import requests
 from PIL import Image, ImageOps
 from PySide6.QtCore import (
+    QEventLoop,
     QObject,
     QThread,
     QTimer,
@@ -552,8 +553,10 @@ def update_status(text: str) -> None:
     _emit_status(_(text))
     if _APP is not None and QThread.currentThread() is _APP.thread():
         # On UI thread — flush events so the user sees the update during
-        # long synchronous start() runs.
-        _APP.processEvents()
+        # long synchronous start() runs.  Input stays queued: a click
+        # handled here would re-enter a model load that holds its lock
+        # (a second swapper change during a TensorRT build hung the app).
+        _APP.processEvents(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
 
 
 def check_and_ignore_nsfw(target, destroy: Optional[Callable] = None) -> bool:
@@ -1355,12 +1358,10 @@ class MainWindow(QMainWindow):
             return
         modules.globals.face_swapper_model = key
         # Unload the previous model now instead of at the next swapped frame,
-        # so two swap models never sit in VRAM at the same time.
+        # so two swap models never sit in VRAM at the same time.  The new
+        # one loads in the processing worker (settings epoch): only that
+        # thread may touch the GPU while Live runs.
         _release_processor("face_swapper")
-        if _WEBCAM_PREVIEW is not None and _WEBCAM_PREVIEW.isVisible():
-            from modules.processors.frame.face_swapper import get_face_swapper
-
-            get_face_swapper()
         _settings_changed()
         save_switch_states()
         update_status(f"Face swapper model: {choice}")
@@ -1371,12 +1372,6 @@ class MainWindow(QMainWindow):
             from modules.face_occluder import release as release_occluder
 
             release_occluder()
-        elif _WEBCAM_PREVIEW is not None and _WEBCAM_PREVIEW.isVisible():
-            # Load the model here, not on the next frame: a worker stalled
-            # on a model load shows the bare face for a second.
-            from modules.face_occluder import get_session as get_occluder
-
-            get_occluder()
         _settings_changed()
         save_switch_states()
 
@@ -1438,8 +1433,6 @@ class MainWindow(QMainWindow):
             if key != selected:
                 _release_processor(key)
         get_frame_processors_modules(modules.globals.frame_processors)
-        if _WEBCAM_PREVIEW is not None and _WEBCAM_PREVIEW.isVisible():
-            _preload_live_models()
         _settings_changed()
         save_switch_states()
 
@@ -1703,6 +1696,8 @@ class _ProcessingWorker(QThread):
         self._fps = camera_fps
 
     def run(self) -> None:
+        from modules.processors.frame.face_swapper import get_face_swapper
+
         frame_processors = get_frame_processors_modules(modules.globals.frame_processors)
         source_image = None
         last_source_path = None
@@ -1759,6 +1754,13 @@ class _ProcessingWorker(QThread):
                     seen_epoch = modules.globals.settings_epoch
                     tracker.reset()
                     force_detect_until = seq + 3
+                    # Reload whatever a toggle unloaded, here rather than
+                    # in the UI handler: this is the one thread allowed on
+                    # the GPU while Live runs, and the display keeps the
+                    # last composed face until the model is back.
+                    frame_processors = get_frame_processors_modules(modules.globals.frame_processors)
+                    get_face_swapper()
+                    _preload_live_models()
                 detected_now = (time.time() - last_detection >= det_period
                                 or seq - last_seq >= 3 or seq <= force_detect_until)
                 last_seq = seq

@@ -124,9 +124,11 @@ def run_inference(session: onnxruntime.InferenceSession,
     path for non-CUDA providers or if binding fails.
     """
     from modules.cuda_graph import GraphSession
+    from modules.providers import TrtSession
 
-    if isinstance(session, GraphSession):
-        # The graph session owns its binding; feed it through its own run().
+    if isinstance(session, (GraphSession, TrtSession)):
+        # The graph session owns its binding, and TensorRT is faster
+        # without one; both lock the GPU inside their own run().
         feed = {input_name: input_tensor}
         if extra_inputs:
             feed.update(extra_inputs)
