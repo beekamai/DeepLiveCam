@@ -116,3 +116,14 @@ The dialog owns the camera itself, so the live preview is closed before it
 opens (one camera, one owner) and `Live` closes the dialog.  The profile is
 saved, activated and remembered in `switch_states.json`; a `--calibration`
 argument wins over the remembered profile.
+
+The user looks away from the screen while turning, so the dialog also
+announces itself: `modules/audio_cues.py` plays tones on every countdown
+second, on arming ("hold still"), on a capture and at the end, and — when
+*Voice prompts* is on — speaks the next pose through the system
+synthesiser (SAPI via PowerShell on Windows, `say` on macOS, `spd-say` /
+`espeak` on Linux).  Speech is English only because that is the one voice
+every OS ships; a new utterance kills the one still playing.  Both options
+persist in `switch_states.json`.  The on-frame cue (countdown digits, "hold
+still") is drawn with a TrueType font through PIL: OpenCV's Hershey fonts
+render anything non-ASCII as `?`, which the Russian UI hit.

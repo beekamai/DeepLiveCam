@@ -354,7 +354,9 @@ def get_face_swapper() -> Any:
     global FACE_SWAPPER, FACE_SWAPPER_KEY
 
     spec = _selected_spec()
-    with THREAD_LOCK:
+    from modules.core import busy
+
+    with THREAD_LOCK, busy(f"Loading {spec.label}..."):
         if FACE_SWAPPER is not None and FACE_SWAPPER_KEY != spec.key:
             # Model switched in the UI — drop the old session (and its CUDA
             # graph) so the next frame runs the newly selected one.

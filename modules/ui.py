@@ -35,6 +35,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
+    QProgressBar,
     QApplication,
     QCheckBox,
     QComboBox,
@@ -462,6 +463,9 @@ def save_switch_states():
         "reprojection": modules.globals.reprojection,
         "language": _LANG.current_language if _LANG is not None else "en",
         "tensorrt": modules.globals.tensorrt,
+        "max_fps": modules.globals.max_fps,
+        "calibration_sounds": modules.globals.calibration_sounds,
+        "calibration_voice": modules.globals.calibration_voice,
     }
     try:
         with open("switch_states.json", "w") as f:
@@ -515,6 +519,9 @@ def load_switch_states():
         modules.globals.eye_reveal = min(1.0, max(0.0, float(state.get("eye_reveal", 0.0))))
         modules.globals.reprojection = state.get("reprojection", True)
         modules.globals.tensorrt = state.get("tensorrt", True)
+        modules.globals.max_fps = max(0, min(60, int(state.get("max_fps", 0))))
+        modules.globals.calibration_sounds = state.get("calibration_sounds", True)
+        modules.globals.calibration_voice = state.get("calibration_voice", False)
         # A profile named on the command line wins over the remembered one.
         if calibration.active() is None and state.get("calibration_profile"):
             calibration.activate_saved(state["calibration_profile"])
@@ -536,6 +543,14 @@ class _UIBridge(QObject):
     """Single QObject that owns cross-thread signals."""
 
     statusChanged = Signal(str)
+    busyChanged = Signal(bool, str)
+
+
+def set_busy(active: bool, text: str = "") -> None:
+    """Model loaders call this (any thread) around their slow parts; the
+    main window shows an activity bar while at least one is in flight."""
+    if _BRIDGE is not None:
+        _BRIDGE.busyChanged.emit(active, _(text))
 
 
 def _emit_status(text: str) -> None:
@@ -659,6 +674,7 @@ class MainWindow(QMainWindow):
         load_switch_states()
         self._start_cb = start_cb
         self._destroy_cb = destroy_cb
+        self._loader: Optional[_ModelLoader] = None
 
         self.setWindowTitle(
             f"{modules.metadata.name} {modules.metadata.version} {modules.metadata.edition}"
@@ -714,6 +730,15 @@ class MainWindow(QMainWindow):
         self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._status_label.setWordWrap(True)
         layout.addWidget(self._status_label)
+        # Indeterminate bar shown while a model loads or a TensorRT engine
+        # builds — the window stays responsive, and this says why it waits.
+        self._busy_bar = QProgressBar()
+        self._busy_bar.setRange(0, 0)
+        self._busy_bar.setTextVisible(False)
+        self._busy_bar.setFixedHeight(6)
+        self._busy_bar.hide()
+        self._busy_depth = 0
+        layout.addWidget(self._busy_bar)
 
         footer = QLabel("Deep Live Cam")
         footer.setObjectName("linkLabel")
@@ -1176,6 +1201,17 @@ class MainWindow(QMainWindow):
         for i, w in enumerate(items):
             grid.addWidget(w, i // 2, i % 2)
         row = (len(items) + 1) // 2
+        fps_row = QHBoxLayout()
+        fps_row.addWidget(QLabel(_("Max FPS")))
+        self.s_max_fps = self._slider(0, 60, modules.globals.max_fps, 1, self._on_max_fps_change)
+        self.s_max_fps.setToolTip(_("Cap on swapped frames per second to spare the GPU; "
+                                    "0 = every camera frame"))
+        self.l_max_fps = QLabel(self._fps_text(modules.globals.max_fps))
+        self.l_max_fps.setMinimumWidth(48)
+        fps_row.addWidget(self.s_max_fps, 1)
+        fps_row.addWidget(self.l_max_fps)
+        grid.addLayout(fps_row, row, 0, 1, 2)
+        row += 1
         lang_row = QHBoxLayout()
         lang_row.addWidget(QLabel(_("Language:")))
         self.cb_language = QComboBox()
@@ -1261,6 +1297,12 @@ class MainWindow(QMainWindow):
 
     def set_status(self, text: str) -> None:
         self._status_label.setText(text)
+
+    def set_busy(self, active: bool, text: str) -> None:
+        self._busy_depth = max(0, self._busy_depth + (1 if active else -1))
+        if active and text:
+            self._status_label.setText(text)
+        self._busy_bar.setVisible(self._busy_depth > 0)
 
     def _on_select_source(self) -> None:
         global _RECENT_SOURCE_DIR
@@ -1396,6 +1438,15 @@ class MainWindow(QMainWindow):
         save_switch_states()
         update_status(_("Backend: {backend}. Models reload on next use; restart Live to apply.")
                       .format(backend=label))
+
+    @staticmethod
+    def _fps_text(value: int) -> str:
+        return _("no cap") if value <= 0 else f"{value} fps"
+
+    def _on_max_fps_change(self, value: float) -> None:
+        modules.globals.max_fps = int(value)
+        self.l_max_fps.setText(self._fps_text(int(value)))
+        save_switch_states()
 
     def _on_language_change(self, label: str) -> None:
         global _LANG
@@ -1534,24 +1585,43 @@ class MainWindow(QMainWindow):
             if modules.globals.source_path is None and needs_source_face():
                 update_status("Please select a source image first")
                 return
-            from modules.face_analyser import get_face_analyser
-            from modules.processors.frame.face_swapper import get_face_swapper
-
+            if self._loader is not None and self._loader.isRunning():
+                # Second click while loading: give up on opening the camera.
+                # A TensorRT build cannot be interrupted, so the thread
+                # finishes in the background and the models stay loaded.
+                self._loader.cancelled = True
+                self.btn_live.setText(_("Live"))
+                update_status("Live start cancelled.")
+                return
+            self._loader = _ModelLoader()
+            self._loader.done.connect(lambda ok, cam=camera_index: self._on_models_loaded(ok, cam))
+            self.btn_live.setText(_("Loading... (click to cancel)"))
             update_status("Loading models...")
-            QApplication.processEvents()
-            get_face_analyser()
-            get_face_swapper()
-            _preload_live_models()
-            update_status("Opening camera...")
-            QApplication.processEvents()
-            _open_webcam_preview(camera_index)
+            self._loader.start()
         else:
             modules.globals.source_target_map = []
             _open_live_mapper_dialog(camera_index, modules.globals.source_target_map)
 
+    def _on_models_loaded(self, ok: bool, camera_index: int) -> None:
+        self.btn_live.setText(_("Live"))
+        loader, self._loader = self._loader, None
+        if loader is None or loader.cancelled:
+            return
+        if not ok:
+            update_status("Could not load the models — see the console for the error.")
+            return
+        update_status("Opening camera...")
+        QApplication.processEvents(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
+        _open_webcam_preview(camera_index)
+
     def closeEvent(self, event):
         # Treat OS-level close as Destroy click — unless the window is being
         # swapped for a retranslated copy.
+        if self._loader is not None and self._loader.isRunning():
+            # An engine build cannot be interrupted; leaving the thread
+            # running while Qt tears down aborts the process.
+            self._loader.cancelled = True
+            self._loader.wait(120_000)
         if not getattr(self, "_replaced", False):
             self._destroy_cb()
         event.accept()
@@ -1637,6 +1707,39 @@ class PreviewWindow(QWidget):
 # ─── webcam preview window ───────────────────────────────────────────────
 
 
+# Consecutive failed camera reads before Live gives up on the device.
+CAPTURE_MAX_MISSES = 90
+
+
+class _ModelLoader(QThread):
+    """Loads everything Live needs, off the UI thread.
+
+    Model loads and TensorRT engine builds take seconds to a minute; on the
+    UI thread they looked like a hung window.  The workers are not running
+    yet, so this is still the only thread on the GPU (see
+    ``_preload_live_models``).
+    """
+
+    done = Signal(bool)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.cancelled = False
+
+    def run(self) -> None:
+        from modules.face_analyser import get_face_analyser
+        from modules.processors.frame.face_swapper import get_face_swapper
+
+        try:
+            get_face_analyser()
+            get_face_swapper()
+            _preload_live_models()
+            self.done.emit(True)
+        except Exception as error:
+            print(f"[live] model load failed: {error}")
+            self.done.emit(False)
+
+
 class _CaptureWorker(QThread):
     """Reads frames from the camera into a bounded queue. Drops on overflow.
 
@@ -1655,11 +1758,21 @@ class _CaptureWorker(QThread):
 
     def run(self) -> None:
         seq = 0
+        misses = 0
         while not self._stop.is_set():
             ret, frame = self._cap.read()
             if not ret:
-                self._stop.set()
-                break
+                # A failed read is usually a hiccup (USB, another app
+                # probing the device); only a run of them means it is gone.
+                misses += 1
+                if misses >= CAPTURE_MAX_MISSES:
+                    update_status("The camera stopped delivering frames — "
+                                  "another application may have taken it.")
+                    self._stop.set()
+                    break
+                time.sleep(0.01)
+                continue
+            misses = 0
             if modules.globals.live_mirror:
                 frame = gpu_flip(frame, 1)
             if modules.globals.reprojection:
@@ -1719,11 +1832,19 @@ class _ProcessingWorker(QThread):
         seen_epoch = modules.globals.settings_epoch
         force_detect_until = -1
 
+        last_processed = 0.0
+
         while not self._stop.is_set():
             try:
                 seq, frame = self._cq.get(timeout=0.05)
             except queue.Empty:
                 continue
+            cap = modules.globals.max_fps
+            if cap > 0 and time.perf_counter() - last_processed < 1.0 / cap:
+                # FPS cap: skip the swap on this frame; the display keeps
+                # showing camera frames through reprojection.
+                continue
+            last_processed = time.perf_counter()
 
             temp_frame = frame
             detected_now = False
@@ -2274,6 +2395,11 @@ def _rebuild_main_window() -> None:
         except (RuntimeError, TypeError):
             pass
         _BRIDGE.statusChanged.connect(fresh.set_status)
+        try:
+            _BRIDGE.busyChanged.disconnect(old.set_busy)
+        except (RuntimeError, TypeError):
+            pass
+        _BRIDGE.busyChanged.connect(fresh.set_busy)
     if modules.globals.source_path or modules.globals.target_path:
         fresh._refresh_previews()
     _MAIN = fresh
@@ -2315,5 +2441,9 @@ def init(
 
     # Route status updates onto the UI thread regardless of caller.
     _BRIDGE.statusChanged.connect(_MAIN.set_status)
+    _BRIDGE.busyChanged.connect(_MAIN.set_busy)
+    from modules import core
+
+    core.BUSY_HOOK = set_busy
 
     return _Window(_APP, _MAIN)

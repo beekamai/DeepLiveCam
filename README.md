@@ -94,7 +94,7 @@ python run.py --execution-provider cuda        # coreml on Apple Silicon, cpu wi
 
 - **`Could not open the camera`** — another app holds it (Camo Studio, a browser tab, Discord). Close it or pick another camera. Calibration and Live cannot run at the same time; opening one closes the other.
 - **Low FPS with the GPU busy** — the swap models are hundreds of tiny GPU kernels; the app is launch-bound, not compute-bound. Install TensorRT (step 7) — it fuses each model into one engine; prefer HyperSwap 1b over Inswapper (same cost, 4× the pixels); close other GPU users (browsers with hardware acceleration, Discord overlay).
-- **Long freeze on first Live after installing TensorRT** — engines are being built (the status line says which model); it happens once per model.
+- **Activity bar under the status line on first Live after installing TensorRT** — engines are being built (the status line says which model); it happens once per model. The window stays responsive: the Live button turns into *Loading… (click to cancel)*, and changing a model during Live reloads it in the background while the last swapped face stays on screen.
 - **`No face in the selected source image`** — the source photo must show one clear, roughly frontal face.
 - **Swap shows the bare face on turns** — recalibrate (Motion → Calibrate…) and turn *as far as the swap should still hold*; the fade begins beyond that.
 - **Video output fails** — ffmpeg is not on `PATH`; see step 4.
@@ -104,7 +104,7 @@ python run.py --execution-provider cuda        # coreml on Apple Silicon, cpu wi
 
 **Live**: pick a source face → choose the camera → **Live**. Stream the preview window with OBS (Window Capture) or point a virtual camera at it.
 
-**Calibrate…** (Live tab or Motion → Calibration): press **Start**, hold each pose when asked — straight, then the furthest left / right / up / down at which the swap should *still* hold — and save. The profile lives in `calibration/` and is remembered.
+**Calibrate…** (Live tab or Motion → Calibration): press **Start**, hold each pose when asked — straight, then the furthest left / right / up / down at which the swap should *still* hold — and save. Tones mark the countdown, each capture and the end, and *Voice prompts* (English, system voice) say which way to turn, so you need not watch the screen. The profile lives in `calibration/` and is remembered.
 
 **Photo / Video**: pick a source face and a target image or video → **Preview** to check a frame → **Start** to render. Output goes next to the target.
 
@@ -115,7 +115,7 @@ Settings tabs:
 | Models | swapper, enhancer, enhancer crop, transparency, sharpness, backend (TensorRT / CUDA graph) |
 | Mask | face outline mask, occlusion mask (XSeg) and its interval, Poisson blend, mask overlay, mouth mask, real blinks, real eyes |
 | Motion | face tracking, low-latency reprojection, calibration profiles and their switches |
-| Output | webcam colour fix, FPS counter, mirror, language, Destroy |
+| Output | webcam colour fix, FPS counter, mirror, **Max FPS** (cap the swap rate to spare the GPU; the preview still shows every camera frame), language, Destroy |
 
 Everything is remembered in `switch_states.json`.
 
@@ -259,7 +259,7 @@ python run.py --execution-provider cuda        # coreml на Apple Silicon, cpu 
 
 - **`Could not open the camera`** — камеру держит другое приложение (Camo Studio, вкладка браузера, Discord). Закройте его или выберите другую камеру. Калибровка и Live не работают одновременно: открытие одного закрывает другое.
 - **Низкий FPS при занятом GPU** — модели подмены состоят из сотен крошечных GPU-ядер, приложение упирается в их запуск, а не в вычисления. Поставьте TensorRT (шаг 7) — он сплавляет каждую модель в один движок; берите HyperSwap 1b вместо Inswapper (та же цена, в 4 раза больше пикселей); закрывайте других потребителей GPU (браузеры с аппаратным ускорением, оверлей Discord).
-- **Долгое зависание при первом Live после установки TensorRT** — собираются движки (в строке статуса видно, какая модель); это один раз на модель.
+- **Полоска активности под строкой статуса при первом Live после установки TensorRT** — собираются движки (в строке статуса видно, какая модель); это один раз на модель. Окно остаётся живым: кнопка Live превращается в *Загрузка… (нажмите, чтобы отменить)*, а смена модели во время Live перегружает её в фоне, пока на экране держится последнее подменённое лицо.
 - **`No face in the selected source image`** — на исходном фото должно быть одно чёткое, примерно фронтальное лицо.
 - **На поворотах видно своё лицо** — перекалибруйтесь (Движение → Калибровка…) и поворачивайтесь *до предела, где подмена ещё должна держаться*; затухание начинается за ним.
 - **Не сохраняется видео** — ffmpeg нет в `PATH`; см. шаг 4.
@@ -269,7 +269,7 @@ python run.py --execution-provider cuda        # coreml на Apple Silicon, cpu 
 
 **Live**: выберите исходное лицо → камеру → **Live**. Окно превью захватывайте в OBS (Window Capture) или подавайте в виртуальную камеру.
 
-**Калибровка…** (вкладка Live или Движение → Калибровка): нажмите **Старт**, держите каждую позу по запросу — прямо, затем максимально влево / вправо / вверх / вниз, где подмена ещё *должна* держаться, — и сохраните. Профиль лежит в `calibration/` и запоминается.
+**Калибровка…** (вкладка Live или Движение → Калибровка): нажмите **Старт**, держите каждую позу по запросу — прямо, затем максимально влево / вправо / вверх / вниз, где подмена ещё *должна* держаться, — и сохраните. Отсчёт, каждый захват и финал отмечаются сигналами, а *Голосовые подсказки* (английский, системный голос) говорят, куда поворачивать, — на экран смотреть не обязательно. Профиль лежит в `calibration/` и запоминается.
 
 **Фото / Видео**: исходное лицо и целевое изображение или видео → **Предпросмотр** для проверки кадра → **Старт** для рендера. Результат кладётся рядом с целью.
 
@@ -280,7 +280,7 @@ python run.py --execution-provider cuda        # coreml на Apple Silicon, cpu 
 | Модели | сваппер, улучшатель, кроп улучшателя, прозрачность, резкость, бэкенд (TensorRT / CUDA-граф) |
 | Маска | маска по контуру, маска перекрытий (XSeg) и её интервал, Poisson-смешивание, показ маски, маска рта, настоящие моргания, свои глаза |
 | Движение | трекинг лица, репроекция, профили калибровки и их переключатели |
-| Вывод | цветокоррекция веб-камеры, счётчик FPS, зеркало, язык, Закрыть |
+| Вывод | цветокоррекция веб-камеры, счётчик FPS, зеркало, **Макс. FPS** (потолок частоты подмены, чтобы разгрузить GPU; превью по-прежнему показывает каждый кадр камеры), язык, Закрыть |
 
 Всё запоминается в `switch_states.json`.
 

@@ -100,6 +100,13 @@ settings_epoch: int = 0
 # Run the models through TensorRT when its runtime is installed (2-3x faster
 # than the CUDA graph; one-off engine build per model).
 tensorrt: bool = True
+# Calibration announces countdown/capture by tones and, optionally, an
+# English voice naming the next pose.
+calibration_sounds: bool = True
+calibration_voice: bool = False
+# Cap on swapped frames per second (0 = every camera frame); the display
+# still shows every camera frame through reprojection.
+max_fps: int = 0
 
 # Face Swapper Specific Options
 face_swapper_enabled: bool = True # General toggle for the swapper processor

@@ -121,8 +121,11 @@ def get_session() -> Optional[Any]:
                 return None
             model_path = _optimised_model(model_path)
             print(f"{NAME}: Loading ONNX model from {model_path}")
-            _SESSION = create_onnx_session(model_path)
-            warmup_session(_SESSION)
+            from modules.core import busy
+
+            with busy("Loading occlusion model..."):
+                _SESSION = create_onnx_session(model_path)
+                warmup_session(_SESSION)
             print(f"{NAME}: Model loaded.")
     return _SESSION
 

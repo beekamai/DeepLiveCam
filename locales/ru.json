@@ -162,5 +162,17 @@
     "TensorRT compiles each model into one engine — 2-3x faster; the first use of a model builds it (up to a minute)": "TensorRT компилирует каждую модель в один движок — в 2-3 раза быстрее; при первом использовании модели он собирается (до минуты)",
     "TensorRT runtime not installed — run install-tensorrt.bat": "Рантайм TensorRT не установлен — запустите install-tensorrt.bat",
     "Backend: {backend}. Models reload on next use; restart Live to apply.": "Бэкенд: {backend}. Модели перезагрузятся при следующем использовании; перезапустите Live.",
-    "Your GPU supports TensorRT (~1.5x fps) — run install-tensorrt.bat": "Ваша видеокарта поддерживает TensorRT (~1,5x fps) — запустите install-tensorrt.bat"
+    "Your GPU supports TensorRT (~1.5x fps) — run install-tensorrt.bat": "Ваша видеокарта поддерживает TensorRT (~1,5x fps) — запустите install-tensorrt.bat",
+    "Sound cues": "Звуковые сигналы",
+    "Beep on the countdown, when a pose is captured and when all are done": "Сигнал на отсчёте, при захвате позы и когда все позы сняты",
+    "Voice prompts (English)": "Голосовые подсказки (английский)",
+    "Say which way to turn, using the system voice": "Произносить, куда поворачивать, системным голосом",
+    "Max FPS": "Макс. FPS",
+    "Cap on swapped frames per second to spare the GPU; 0 = every camera frame": "Потолок кадров подмены в секунду, чтобы разгрузить видеокарту; 0 = каждый кадр камеры",
+    "no cap": "без лимита",
+    "Loading... (click to cancel)": "Загрузка... (нажмите, чтобы отменить)",
+    "Live start cancelled.": "Запуск Live отменён.",
+    "Loading models...": "Загрузка моделей...",
+    "Could not load the models — see the console for the error.": "Не удалось загрузить модели — ошибка в консоли.",
+    "The camera stopped delivering frames — another application may have taken it.": "Камера перестала отдавать кадры — возможно, её заняло другое приложение."
 }

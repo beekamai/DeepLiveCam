@@ -98,6 +98,11 @@ app hung for good.  Now the handlers only release the old model and bump
 thread during Live, and the display keeps the last composed face while it
 waits), and `update_status` flushes events with `ExcludeUserInputEvents`.
 
+`Max FPS` (Output tab, `modules.globals.max_fps`) caps how often the
+processing worker swaps: frames arriving sooner than `1 / max_fps` after the
+last swap are skipped before detection, so GPU load falls with the cap
+while the display keeps every camera frame through reprojection.
+
 Levers that remain after TensorRT: the CPU milliseconds around the models
 (paste-back and mask warps are ~8 ms of the swap stage) and running XSeg
 every 2nd frame (`occlusion_interval`).

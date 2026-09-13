@@ -156,31 +156,30 @@ def make_session(model_path: str, label: Optional[str] = None) -> Optional[Any]:
     if not tensorrt_wanted():
         return None
     name = label or os.path.basename(model_path)
-    try:
-        from modules.core import update_status
+    from modules.core import busy, update_status
 
-        update_status(f"TensorRT: preparing engine for {name} (first time takes up to a minute)...")
-    except Exception:
-        pass
+    text = f"TensorRT: preparing engine for {name} (first time takes up to a minute)..."
+    update_status(text)
     try:
-        options = onnxruntime.SessionOptions()
-        options.log_severity_level = 3
-        session = onnxruntime.InferenceSession(
-            model_path, sess_options=options, providers=tensorrt_providers(model_path),
-        )
-        if session.get_providers()[0] != "TensorrtExecutionProvider":
-            print(f"[tensorrt] provider not attached for {name}; using CUDA")
-            return None
-        # A run builds (or loads) the engine and confirms it works.
-        import numpy as np
+        with busy(text):
+            options = onnxruntime.SessionOptions()
+            options.log_severity_level = 3
+            session = onnxruntime.InferenceSession(
+                model_path, sess_options=options, providers=tensorrt_providers(model_path),
+            )
+            if session.get_providers()[0] != "TensorrtExecutionProvider":
+                print(f"[tensorrt] provider not attached for {name}; using CUDA")
+                return None
+            # A run builds (or loads) the engine and confirms it works.
+            import numpy as np
 
-        feed = {}
-        for inp in session.get_inputs():
-            shape = [d if isinstance(d, int) and d > 0 else 1 for d in inp.shape]
-            dtype = {"tensor(float16)": np.float16, "tensor(double)": np.float64}.get(inp.type, np.float32)
-            feed[inp.name] = np.zeros(shape, dtype=dtype)
-        with GRAPH_LOCK:
-            session.run(None, feed)
+            feed = {}
+            for inp in session.get_inputs():
+                shape = [d if isinstance(d, int) and d > 0 else 1 for d in inp.shape]
+                dtype = {"tensor(float16)": np.float16, "tensor(double)": np.float64}.get(inp.type, np.float32)
+                feed[inp.name] = np.zeros(shape, dtype=dtype)
+            with GRAPH_LOCK:
+                session.run(None, feed)
         print(f"[tensorrt] {name} ready")
         return TrtSession(session)
     except Exception as error:

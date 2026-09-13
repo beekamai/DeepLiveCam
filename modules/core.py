@@ -232,6 +232,26 @@ def update_status(message: str, scope: str = 'DLC.CORE') -> None:
     if not modules.globals.headless:
         ui.update_status(message)
 
+
+# The UI registers a callable(active: bool, text: str) here; model loaders
+# wrap their slow parts in ``busy`` so the window shows an activity bar
+# instead of looking hung.
+BUSY_HOOK = None
+
+
+class busy:
+    def __init__(self, text: str) -> None:
+        self._text = text
+
+    def __enter__(self):
+        if BUSY_HOOK is not None:
+            BUSY_HOOK(True, self._text)
+        return self
+
+    def __exit__(self, *exc) -> None:
+        if BUSY_HOOK is not None:
+            BUSY_HOOK(False, self._text)
+
 def start() -> None:
     """Start processing with performance monitoring."""
     import time

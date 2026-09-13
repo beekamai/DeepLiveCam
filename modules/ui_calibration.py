@@ -11,6 +11,7 @@ buttons remain for redoing a single one.  All the logic lives in
 from __future__ import annotations
 
 import threading
+from functools import lru_cache
 from typing import Callable, Dict, Optional
 
 import cv2
@@ -18,6 +19,7 @@ import numpy as np
 from PySide6.QtCore import QThread, Qt, QTimer, Signal
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
+    QCheckBox,
     QApplication,
     QDialog,
     QGridLayout,
@@ -33,7 +35,7 @@ from PySide6.QtWidgets import (
 )
 
 import modules.globals
-from modules import calibration
+from modules import audio_cues, calibration
 from modules.gettext import _
 from modules.face_analyser import detect_one_face_fast, ensure_landmarks
 from modules.video_capture import VideoCapturer
@@ -48,6 +50,14 @@ STEP_LABELS = {
     "right": "Turn right",
     "up": "Tilt up",
     "down": "Tilt down",
+}
+# Spoken (English only — see audio_cues) when the guided flow reaches a pose.
+VOICE_PROMPTS = {
+    "neutral": "Look straight at the camera.",
+    "left": "Turn your head left, as far as the swap should hold.",
+    "right": "Turn your head right.",
+    "up": "Tilt your head up.",
+    "down": "Tilt your head down.",
 }
 
 
@@ -78,18 +88,46 @@ class _CalibrationWorker(QThread):
             self.frame_ready.emit(frame, face, completed)
 
 
+_FONT_FILES = (
+    "C:/Windows/Fonts/segoeui.ttf", "C:/Windows/Fonts/arial.ttf",
+    "/System/Library/Fonts/Supplemental/Arial.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+)
+
+
+@lru_cache(maxsize=8)
+def _font(size: int):
+    from PIL import ImageFont
+
+    for path in _FONT_FILES:
+        try:
+            return ImageFont.truetype(path, size)
+        except OSError:
+            continue
+    return ImageFont.load_default()
+
+
+def _draw_cue(out: np.ndarray, cue: str) -> np.ndarray:
+    """The cue centred on the frame; drawn with a TrueType font because
+    OpenCV's Hershey fonts render anything beyond ASCII as ``?``."""
+    from PIL import Image, ImageDraw
+
+    h, w = out.shape[:2]
+    font = _font(max(40, h // 6))
+    image = Image.fromarray(cv2.cvtColor(out, cv2.COLOR_BGR2RGB))
+    draw = ImageDraw.Draw(image)
+    left, top, right, bottom = draw.textbbox((0, 0), cue, font=font)
+    x = (w - (right - left)) // 2 - left
+    y = (h - (bottom - top)) // 2 - top
+    draw.text((x, y), cue, font=font, fill=(255, 255, 255),
+              stroke_width=max(2, h // 120), stroke_fill=(0, 0, 0))
+    return cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2BGR)
+
+
 def _draw_overlay(frame: np.ndarray, face, profile_kps_text: str, cue: str = "") -> np.ndarray:
     """Face outline, keypoints and the pose readout on a copy of the frame;
     ``cue`` is drawn large in the centre (countdown, "hold still")."""
-    out = frame.copy()
-    if cue:
-        h, w = out.shape[:2]
-        scale = max(1.0, h / 240.0)
-        (tw, th), _ = cv2.getTextSize(cue, cv2.FONT_HERSHEY_DUPLEX, scale, 3)
-        cv2.putText(out, cue, ((w - tw) // 2, h // 2 + th // 2),
-                    cv2.FONT_HERSHEY_DUPLEX, scale, (0, 0, 0), 6)
-        cv2.putText(out, cue, ((w - tw) // 2, h // 2 + th // 2),
-                    cv2.FONT_HERSHEY_DUPLEX, scale, (255, 255, 255), 3)
+    out = _draw_cue(frame, cue) if cue else frame.copy()
     if face is None:
         cv2.putText(out, "No face", (16, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (60, 60, 230), 2)
         return out
@@ -181,6 +219,20 @@ class CalibrationDialog(QDialog):
         intro.setWordWrap(True)
         layout.addWidget(intro)
 
+        cues = QHBoxLayout()
+        self._sounds = QCheckBox(_("Sound cues"))
+        self._sounds.setChecked(modules.globals.calibration_sounds)
+        self._sounds.setToolTip(_("Beep on the countdown, when a pose is captured and when all are done"))
+        self._sounds.toggled.connect(lambda v: self._set_cue_option("calibration_sounds", v))
+        self._voice = QCheckBox(_("Voice prompts (English)"))
+        self._voice.setChecked(modules.globals.calibration_voice)
+        self._voice.setToolTip(_("Say which way to turn, using the system voice"))
+        self._voice.toggled.connect(lambda v: self._set_cue_option("calibration_voice", v))
+        cues.addWidget(self._sounds)
+        cues.addWidget(self._voice)
+        cues.addStretch(1)
+        layout.addLayout(cues)
+
         guided = QHBoxLayout()
         self._start = QPushButton(_("Start"))
         self._start.setToolTip(_("Walk through all five poses with a countdown before each"))
@@ -256,6 +308,13 @@ class CalibrationDialog(QDialog):
 
     # ── guided flow ──────────────────────────────────────────────────────
 
+    @staticmethod
+    def _set_cue_option(name: str, value: bool) -> None:
+        setattr(modules.globals, name, value)
+        from modules.ui import save_switch_states
+
+        save_switch_states()
+
     def _start_flow(self) -> None:
         if self._worker is None:
             return
@@ -268,11 +327,15 @@ class CalibrationDialog(QDialog):
             self._start.setEnabled(True)
             self._skip.setEnabled(False)
             self._set_prompt(_("All poses done — name the profile and press Save."))
+            audio_cues.tone("done")
+            audio_cues.say("All poses done. Name the profile and save.")
             return
         step = self._flow[0]
         self._set_prompt(_(calibration.STEP_PROMPTS[step]))
+        audio_cues.say(VOICE_PROMPTS[step])
         self._skip.setEnabled(step != "neutral")
         self._countdown = COUNTDOWN_SECONDS
+        audio_cues.tone("tick")
         self._countdown_timer.start()
 
     def _on_countdown(self) -> None:
@@ -281,6 +344,8 @@ class CalibrationDialog(QDialog):
             self._countdown_timer.stop()
             if self._flow:
                 self._arm(self._flow[0])
+        else:
+            audio_cues.tone("tick")
 
     def _skip_step(self) -> None:
         if not self._flow or self._flow[0] == "neutral":
@@ -310,6 +375,8 @@ class CalibrationDialog(QDialog):
         self._session.arm(step)
         self._progress.setValue(0)
         self._set_prompt(_(calibration.STEP_PROMPTS[step]) + "  " + _("Hold still..."))
+        audio_cues.tone("arm")
+        audio_cues.say("Hold still.")
         for name, button in self._step_buttons.items():
             button.setEnabled(name == step)
         self._step_buttons[step].setText(_("Capturing"))
@@ -333,6 +400,9 @@ class CalibrationDialog(QDialog):
         if completed is not None:
             self._progress.setValue(100)
             self._step_status[completed].setText("✓")
+            audio_cues.tone("captured")
+            if not (self._flow and self._flow[0] == completed):
+                audio_cues.say(f"{STEP_LABELS[completed]} captured.")
             for name, button in self._step_buttons.items():
                 button.setEnabled(True)
                 button.setText(_("Redo") if name in self._session.captured else _("Capture"))
@@ -361,6 +431,7 @@ class CalibrationDialog(QDialog):
 
     def closeEvent(self, event) -> None:
         self._countdown_timer.stop()
+        audio_cues.stop()
         self._stop_event.set()
         if self._worker is not None:
             self._worker.wait(2000)
