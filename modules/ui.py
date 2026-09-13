@@ -688,8 +688,12 @@ class MainWindow(QMainWindow):
         self._modes.addTab(self._build_live_page(), _("Live"))
         self._modes.addTab(self._build_media_page(), _("Photo / Video"))
         self._modes.setToolTip(_("Live swaps your webcam; Photo / Video processes a file"))
-        # Takes whatever width is left of the source column, never more.
+        # Takes whatever width is left of the source column, never more —
+        # and only as much height as the *current* page needs, so the short
+        # Live page does not inherit the Photo / Video page's height.
         self._modes.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self._modes.currentChanged.connect(self._fit_mode_tabs)
+        self._fit_mode_tabs(self._modes.currentIndex())
         top.addWidget(self._modes, 1)
         layout.addLayout(top)
 
@@ -745,6 +749,13 @@ class MainWindow(QMainWindow):
             if pm is not None:
                 self.target_label.setPixmap(pm)
 
+    def _fit_mode_tabs(self, index: int) -> None:
+        for i in range(self._modes.count()):
+            page = self._modes.widget(i)
+            policy = QSizePolicy.Policy.Preferred if i == index else QSizePolicy.Policy.Ignored
+            page.setSizePolicy(QSizePolicy.Policy.Ignored, policy)
+        self._modes.adjustSize()
+
     # ── widget helpers ───────────────────────────────────────────────────
 
     def _switch(self, field: str, label: str, tip: str) -> _Switch:
@@ -785,7 +796,7 @@ class MainWindow(QMainWindow):
             _("Choose the source face image to swap onto the target")
         )
         self.btn_select_source.clicked.connect(self._on_select_source)
-        self.btn_random_face = QPushButton("🔄")
+        self.btn_random_face = QPushButton("⟳")
         self.btn_random_face.setObjectName("secondary")
         self.btn_random_face.setFixedWidth(40)
         self.btn_random_face.setToolTip(

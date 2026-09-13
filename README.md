@@ -4,8 +4,14 @@
 [![ONNX Runtime](https://img.shields.io/badge/onnxruntime--gpu-1.26-green.svg)](https://onnxruntime.ai/)
 [![PySide6](https://img.shields.io/badge/UI-PySide6-41cd52.svg)](https://doc.qt.io/qtforpython/)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-lightgrey.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/beekamai/DeepLiveCam?display_name=tag&color=orange)](https://github.com/beekamai/DeepLiveCam/releases)
+[![Stars](https://img.shields.io/github/stars/beekamai/DeepLiveCam?style=flat&color=yellow)](https://github.com/beekamai/DeepLiveCam/stargazers)
 
 🇬🇧 [English](#english) · 🇷🇺 [Русский](#русский)
+
+<p align="center">
+  <img src="media/demo.gif" alt="Live face swap demo" width="800">
+</p>
 
 ---
 
@@ -26,6 +32,19 @@ A fork of [Deep-Live-Cam](https://github.com/hacksider/Deep-Live-Cam) built arou
 - 🎛 **Instant toggles** — mirror, masks and models re-detect on the next frame instead of dropping the swap for a moment
 - 🧩 Swappers: Inswapper-128, HyperSwap 1a / 1b / 1c (256 px). Enhancers: GPEN-256 / 512 / 1024, GFPGAN 1.4, CodeFormer, RestoreFormer++
 - 🖥 Responsive PySide6 UI with Live and Photo / Video modes, English and Russian (switchable at runtime)
+
+### What it looks like
+
+<p align="center">
+  <img src="media/ui_live.png" alt="Live mode and the Motion tab" width="420">
+  <img src="media/ui_media.png" alt="Photo / Video mode and the Mask tab" width="420">
+</p>
+
+<p align="center">
+  <img src="media/ludwig.gif" alt="Mouth mask keeps the real mouth" width="400">
+  <img src="media/streamers.gif" alt="Face mapping onto several people" width="400">
+  <br><sub>Mouth mask and face mapping — demos from upstream Deep-Live-Cam, both still here.</sub>
+</p>
 
 ### Requirements
 
@@ -151,6 +170,10 @@ Built on [Deep-Live-Cam](https://github.com/hacksider/Deep-Live-Cam) by hackside
 
 AGPL-3.0, as upstream. Models keep their own licences.
 
+### Star history
+
+[![Star History Chart](https://api.star-history.com/svg?repos=beekamai/DeepLiveCam&type=Date)](https://star-history.com/#beekamai/DeepLiveCam&Date)
+
 ---
 
 ## Русский
@@ -170,6 +193,19 @@ AGPL-3.0, as upstream. Models keep their own licences.
 - 🎛 **Мгновенные переключатели** — зеркало, маски и модели передетектируют на следующем кадре, без провала в оригинал
 - 🧩 Свапперы: Inswapper-128, HyperSwap 1a / 1b / 1c (256 px). Улучшатели: GPEN-256 / 512 / 1024, GFPGAN 1.4, CodeFormer, RestoreFormer++
 - 🖥 Адаптивный интерфейс на PySide6 с режимами Live и Фото / Видео, английский и русский (переключается на лету)
+
+### Как это выглядит
+
+<p align="center">
+  <img src="media/ui_live.png" alt="Режим Live и вкладка Движение" width="420">
+  <img src="media/ui_media.png" alt="Режим Фото / Видео и вкладка Маска" width="420">
+</p>
+
+<p align="center">
+  <img src="media/ludwig.gif" alt="Маска рта оставляет настоящий рот" width="400">
+  <img src="media/streamers.gif" alt="Сопоставление лиц на нескольких людях" width="400">
+  <br><sub>Маска рта и сопоставление лиц — демо из исходного Deep-Live-Cam, обе функции на месте.</sub>
+</p>
 
 ### Требования
 
@@ -294,3 +330,7 @@ docs/                   заметки по устройству
 ### Лицензия
 
 AGPL-3.0, как у исходного проекта. Модели — под своими лицензиями.
+
+### История звёзд
+
+[![Star History Chart](https://api.star-history.com/svg?repos=beekamai/DeepLiveCam&type=Date)](https://star-history.com/#beekamai/DeepLiveCam&Date)

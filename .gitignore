@@ -32,4 +32,9 @@ switch_states.json
 calibration/
 ffmpeg.exe
 .tmp-*
-media/
+media/*
+!media/demo.gif
+!media/ludwig.gif
+!media/streamers.gif
+!media/ui_live.png
+!media/ui_media.png
