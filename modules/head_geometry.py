@@ -52,7 +52,11 @@ class HeadPose:
         jaw = points[JAW]
         brows = points[BROWS]
         height = float(points[:, 1].max() - points[:, 1].min())
-        forehead = brows - np.array([0.0, height * FOREHEAD_RISE], dtype=np.float32)
+        rise = float(getattr(modules.globals, "mask_forehead", FOREHEAD_RISE))
+        forehead = brows - np.array([0.0, height * rise], dtype=np.float32)
+        drop = float(getattr(modules.globals, "mask_chin", 0.0))
+        if drop > 0:
+            jaw = np.vstack([jaw, jaw[6:11] + np.array([0.0, height * drop], dtype=np.float32)])
         return np.vstack([jaw, forehead]).astype(np.float32)
 
 

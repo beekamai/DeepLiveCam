@@ -342,8 +342,9 @@ def _build_providers_config() -> list:
                 },
             ))
         elif p == "CUDAExecutionProvider":
-            # Bare provider — ONNX Runtime defaults are fastest on Blackwell.
-            providers_config.append(p)
+            from modules.providers import cuda_provider
+
+            providers_config.append(cuda_provider())
         elif p == "OpenVINOExecutionProvider":
             providers_config.append(OPENVINO_PROVIDER_CONFIG)
         else:
@@ -541,7 +542,10 @@ def _init_cuda_graph_session(model_path: str, swapper):
     """
     import onnxruntime as ort
     try:
-        providers = [('CUDAExecutionProvider', {'enable_cuda_graph': '1'})]
+        from modules.providers import cuda_device
+
+        device = cuda_device()
+        providers = [('CUDAExecutionProvider', {'enable_cuda_graph': '1', 'device_id': str(device)})]
         sess = ort.InferenceSession(model_path, providers=providers)
 
         # Pre-allocate GPU buffers with correct shapes
@@ -550,13 +554,13 @@ def _init_cuda_graph_session(model_path: str, swapper):
         dummy_inp = np.zeros(inp_shape, dtype=np.float32)
         dummy_lat = np.zeros(latent_shape, dtype=np.float32)
 
-        ort_input = ort.OrtValue.ortvalue_from_numpy(dummy_inp, 'cuda', 0)
-        ort_latent = ort.OrtValue.ortvalue_from_numpy(dummy_lat, 'cuda', 0)
+        ort_input = ort.OrtValue.ortvalue_from_numpy(dummy_inp, 'cuda', device)
+        ort_latent = ort.OrtValue.ortvalue_from_numpy(dummy_lat, 'cuda', device)
 
         io = sess.io_binding()
         io.bind_ortvalue_input(swapper.input_names[0], ort_input)
         io.bind_ortvalue_input(swapper.input_names[1], ort_latent)
-        io.bind_output(swapper.output_names[0], 'cuda', 0)
+        io.bind_output(swapper.output_names[0], 'cuda', device)
 
         # First run records the CUDA graph
         from modules.cuda_graph import GRAPH_LOCK

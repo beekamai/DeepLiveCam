@@ -116,6 +116,14 @@ head_pose: bool = True
 # "lips" stays on the lips (plus a stuck-out tongue below) so a moustache
 # above the lip is never revealed.
 mouth_reveal_mode: str = "region"
+# Mask outline reach beyond the landmarks, as a share of the face height:
+# up over the forehead (the landmarks stop at the brows) and down past the chin.
+mask_forehead: float = 0.35
+mask_chin: float = 0.0
+# CUDA device index for every session and buffer (restart to apply).
+gpu_device: int = 0
+# Camera capture size for Live: "360p", "480p", "720p", "1080p", "1440p".
+camera_resolution: str = "720p"
 head_outline: bool = True
 head_yaw_limit: int = 55
 head_pitch_limit: int = 35

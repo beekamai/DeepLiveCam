@@ -24,6 +24,12 @@ import onnxruntime
 GRAPH_LOCK = threading.RLock()
 
 
+def _device() -> int:
+    import modules.globals
+
+    return int(getattr(modules.globals, "gpu_device", 0) or 0)
+
+
 class GraphSession:
     """An ONNX session that replays a recorded CUDA graph for one input shape.
 
@@ -46,17 +52,19 @@ class GraphSession:
             self._output_names = [o.name for o in self._session.get_outputs()]
             return
         self._session = onnxruntime.InferenceSession(
-            model_path, providers=[("CUDAExecutionProvider", {"enable_cuda_graph": "1"})],
+            model_path, providers=[("CUDAExecutionProvider", {
+                "enable_cuda_graph": "1", "device_id": str(_device()),
+            })],
         )
 
         self._ort_input = onnxruntime.OrtValue.ortvalue_from_numpy(
-            np.zeros(self._input_shape, dtype=np.float32), "cuda", 0,
+            np.zeros(self._input_shape, dtype=np.float32), "cuda", _device(),
         )
         self._binding = self._session.io_binding()
         self._binding.bind_ortvalue_input(input_name, self._ort_input)
         self._output_names = [o.name for o in self._session.get_outputs()]
         for name in self._output_names:
-            self._binding.bind_output(name, "cuda", 0)
+            self._binding.bind_output(name, "cuda", _device())
         with GRAPH_LOCK:
             self._session.run_with_iobinding(self._binding)  # records the graph
 

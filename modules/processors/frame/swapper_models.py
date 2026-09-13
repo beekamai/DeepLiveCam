@@ -16,6 +16,7 @@ from insightface.utils import face_align
 
 from modules.swapper_registry import SwapperSpec
 from modules.cuda_graph import GRAPH_LOCK
+from modules.providers import cuda_device
 from modules.processors.frame._onnx_enhancer import WARP_TEMPLATES
 
 
@@ -69,15 +70,15 @@ class OnnxSwapper:
             self._read_io_names()
             size = self.spec.input_size
             ort_target = onnxruntime.OrtValue.ortvalue_from_numpy(
-                np.zeros((1, 3, size, size), dtype=np.float32), "cuda", 0,
+                np.zeros((1, 3, size, size), dtype=np.float32), "cuda", cuda_device(),
             )
             ort_source = onnxruntime.OrtValue.ortvalue_from_numpy(
-                np.zeros((1, 512), dtype=np.float32), "cuda", 0,
+                np.zeros((1, 512), dtype=np.float32), "cuda", cuda_device(),
             )
             io_binding = session.io_binding()
             io_binding.bind_ortvalue_input(self.target_name, ort_target)
             io_binding.bind_ortvalue_input(self.source_name, ort_source)
-            io_binding.bind_output(self.output_name, "cuda", 0)
+            io_binding.bind_output(self.output_name, "cuda", cuda_device())
             with GRAPH_LOCK:
                 session.run_with_iobinding(io_binding)  # records the graph
             self._graph = {

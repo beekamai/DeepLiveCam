@@ -90,11 +90,11 @@ def build_provider_config(providers=None):
             # Already configured – pass through
             config.append(p)
         elif p == "CUDAExecutionProvider":
-            # Use bare provider — ONNX Runtime's defaults are fastest on
-            # modern GPUs (Blackwell/sm_120).  Custom options like
-            # EXHAUSTIVE cudnn_conv_algo_search hurt performance on these
-            # architectures.
-            config.append(p)
+            # Bare provider unless another GPU was chosen — ONNX Runtime's
+            # defaults are fastest on modern GPUs (Blackwell/sm_120).
+            from modules.providers import cuda_provider
+
+            config.append(cuda_provider())
         elif p == "CoreMLExecutionProvider" and IS_APPLE_SILICON:
             config.append((
                 "CoreMLExecutionProvider",
@@ -146,14 +146,16 @@ def run_inference(session: onnxruntime.InferenceSession,
             io_binding = session.io_binding()
 
             # Input: numpy → GPU
+            from modules.providers import cuda_device
+
             ort_input = onnxruntime.OrtValue.ortvalue_from_numpy(
-                input_tensor, "cuda", 0,
+                input_tensor, "cuda", cuda_device(),
             )
             io_binding.bind_ortvalue_input(input_name, ort_input)
 
             # Output: allocate on GPU (avoids a CPU-side allocation)
             output_name = session.get_outputs()[0].name
-            io_binding.bind_output(output_name, "cuda", 0)
+            io_binding.bind_output(output_name, "cuda", cuda_device())
 
             session.run_with_iobinding(io_binding)
 
@@ -353,6 +355,7 @@ OUTLINE_REJECT_STREAK = 3
 # Forehead synthesised above the brow line: how many top landmarks form the
 # brow, and how far up (as a fraction of the landmark height) to lift them.
 BROW_POINTS = 12
+CHIN_POINTS = 5
 FOREHEAD_RISE = 0.35
 # Median per-point jump (in crop widths) above which the landmark set is
 # treated as a misfire rather than real movement.
@@ -424,9 +427,16 @@ def face_outline_mask(face: Any, affine: np.ndarray, input_size: int,
     # the hull stops there and the upper eyelids sit on the mask's feather.
     # Mirror the brow line upward to give the outline a forehead.
     height = float(scaled[:, 1].max() - scaled[:, 1].min())
-    brow = scaled[np.argsort(scaled[:, 1])[:BROW_POINTS]]
-    forehead = brow - np.array([0.0, height * FOREHEAD_RISE], dtype=np.float32)
-    hull = cv2.convexHull(np.vstack([scaled, forehead]).astype(np.int32))
+    order = np.argsort(scaled[:, 1])
+    brow = scaled[order[:BROW_POINTS]]
+    rise = float(getattr(modules.globals, "mask_forehead", FOREHEAD_RISE))
+    forehead = brow - np.array([0.0, height * rise], dtype=np.float32)
+    parts = [scaled, forehead]
+    drop = float(getattr(modules.globals, "mask_chin", 0.0))
+    if drop > 0:
+        # The chin slider pushes the lowest jaw points down (beard, double chin).
+        parts.append(scaled[order[-CHIN_POINTS:]] + np.array([0.0, height * drop], dtype=np.float32))
+    hull = cv2.convexHull(np.vstack(parts).astype(np.int32))
     mask = np.zeros((input_size, input_size), dtype=np.uint8)
     cv2.fillConvexPoly(mask, hull, 255)
     # The 3D fit's contour stays a silhouette on a turned head where the

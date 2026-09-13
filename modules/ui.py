@@ -105,6 +105,11 @@ PREVIEW_MAX_HEIGHT = 700
 PREVIEW_MAX_WIDTH = 1200
 PREVIEW_DEFAULT_WIDTH = 640
 PREVIEW_DEFAULT_HEIGHT = 360
+# Camera capture sizes offered on the Live page.
+RESOLUTIONS = {
+    "360p": (640, 360), "480p": (854, 480), "720p": (1280, 720),
+    "1080p": (1920, 1080), "1440p": (2560, 1440),
+}
 
 POPUP_WIDTH = 750
 POPUP_HEIGHT = 810
@@ -460,6 +465,10 @@ def save_switch_states():
         "tensorrt": modules.globals.tensorrt,
         "max_fps": modules.globals.max_fps,
         "head_pose": modules.globals.head_pose,
+        "mask_forehead": modules.globals.mask_forehead,
+        "mask_chin": modules.globals.mask_chin,
+        "gpu_device": modules.globals.gpu_device,
+        "camera_resolution": modules.globals.camera_resolution,
         "head_outline": modules.globals.head_outline,
         "head_yaw_limit": modules.globals.head_yaw_limit,
         "head_pitch_limit": modules.globals.head_pitch_limit,
@@ -521,6 +530,11 @@ def load_switch_states():
         modules.globals.max_fps = max(0, min(60, int(state.get("max_fps", 0))))
         modules.globals.head_pose = state.get("head_pose", True)
         modules.globals.mouth_reveal_mode = state.get("mouth_reveal_mode", "region")
+        modules.globals.mask_forehead = min(0.8, max(0.1, float(state.get("mask_forehead", 0.35))))
+        modules.globals.mask_chin = min(0.3, max(0.0, float(state.get("mask_chin", 0.0))))
+        modules.globals.gpu_device = max(0, int(state.get("gpu_device", 0)))
+        if state.get("camera_resolution") in RESOLUTIONS:
+            modules.globals.camera_resolution = state["camera_resolution"]
         if modules.globals.mouth_reveal_mode not in ("region", "lips"):
             modules.globals.mouth_reveal_mode = "region"
         modules.globals.head_outline = state.get("head_outline", True)
@@ -887,6 +901,16 @@ class MainWindow(QMainWindow):
         cam_row.addWidget(self.cb_camera, 1)
         layout.addLayout(cam_row)
 
+        res_row = QHBoxLayout()
+        res_row.addWidget(QLabel(_("Resolution:")))
+        self.cb_resolution = QComboBox()
+        self.cb_resolution.addItems(list(RESOLUTIONS))
+        self.cb_resolution.setCurrentText(modules.globals.camera_resolution)
+        self.cb_resolution.setToolTip(_("Camera capture size: lower is faster, higher is sharper"))
+        self.cb_resolution.currentTextChanged.connect(self._on_resolution_change)
+        res_row.addWidget(self.cb_resolution, 1)
+        layout.addLayout(res_row)
+
         buttons = QHBoxLayout()
         self.btn_live = QPushButton(_("Live"))
         self.btn_live.setEnabled(cam_ok)
@@ -1033,6 +1057,18 @@ class MainWindow(QMainWindow):
         self.cb_backend.currentTextChanged.connect(self._on_backend_change)
         grid.addWidget(self.cb_backend, 5, 1)
 
+        grid.addWidget(QLabel(_("GPU:")), 6, 0)
+        self.cb_gpu = QComboBox()
+        from modules.providers import list_gpus
+
+        gpus = list_gpus()
+        self.cb_gpu.addItems(gpus or [_("default")])
+        self.cb_gpu.setCurrentIndex(min(modules.globals.gpu_device, max(0, len(gpus) - 1)))
+        self.cb_gpu.setEnabled(len(gpus) > 1)
+        self.cb_gpu.setToolTip(_("Which GPU runs the models — takes effect after a restart"))
+        self.cb_gpu.currentIndexChanged.connect(self._on_gpu_change)
+        grid.addWidget(self.cb_gpu, 6, 1)
+
         grid.addWidget(QLabel(_("Transparency")), 3, 0)
         self.s_transparency = self._slider(0.0, 1.0, 1.0, 100, self._on_transparency_change)
         self.s_transparency.setToolTip(
@@ -1045,8 +1081,15 @@ class MainWindow(QMainWindow):
         self.s_sharpness.setToolTip(_("Sharpen the enhanced face output"))
         grid.addWidget(self.s_sharpness, 4, 1)
 
-        grid.setRowStretch(6, 1)
+        grid.setRowStretch(7, 1)
         return page
+
+    def _on_gpu_change(self, index: int) -> None:
+        if index < 0 or index == modules.globals.gpu_device:
+            return
+        modules.globals.gpu_device = index
+        save_switch_states()
+        update_status("GPU changed — restart the application to apply.")
 
     # ── mask tab ─────────────────────────────────────────────────────────
 
@@ -1135,8 +1178,25 @@ class MainWindow(QMainWindow):
         )
         grid.addWidget(self.s_eyes, 6, 1)
 
-        grid.setRowStretch(7, 1)
+        grid.addWidget(QLabel(_("Forehead")), 7, 0)
+        self.s_forehead = self._slider(0.1, 0.8, modules.globals.mask_forehead, 100, self._on_forehead_change)
+        self.s_forehead.setToolTip(_("How far above the brows the mask reaches, as a share of the face height"))
+        grid.addWidget(self.s_forehead, 7, 1)
+        grid.addWidget(QLabel(_("Chin")), 8, 0)
+        self.s_chin = self._slider(0.0, 0.3, modules.globals.mask_chin, 100, self._on_chin_change)
+        self.s_chin.setToolTip(_("How far below the jaw landmarks the mask reaches (beard, double chin)"))
+        grid.addWidget(self.s_chin, 8, 1)
+
+        grid.setRowStretch(9, 1)
         return page
+
+    def _on_forehead_change(self, value: float) -> None:
+        modules.globals.mask_forehead = value
+        save_switch_states()
+
+    def _on_chin_change(self, value: float) -> None:
+        modules.globals.mask_chin = value
+        save_switch_states()
 
     # ── motion tab ───────────────────────────────────────────────────────
 
@@ -1694,6 +1754,17 @@ class MainWindow(QMainWindow):
             modules.globals.source_target_map = []
             _open_live_mapper_dialog(camera_index, modules.globals.source_target_map)
 
+    def _on_resolution_change(self, label: str) -> None:
+        if label not in RESOLUTIONS or label == modules.globals.camera_resolution:
+            return
+        modules.globals.camera_resolution = label
+        save_switch_states()
+        if _WEBCAM_PREVIEW is not None and _WEBCAM_PREVIEW.isVisible():
+            # The camera negotiates its size when it opens: reopen it.
+            camera_index = _WEBCAM_PREVIEW.camera_index
+            _WEBCAM_PREVIEW.close()
+            _open_webcam_preview(camera_index)
+
     def _on_models_loaded(self, ok: bool, camera_index: int) -> None:
         self.btn_live.setText(_("Live"))
         loader, self._loader = self._loader, None
@@ -2115,11 +2186,13 @@ class WebcamPreviewWindow(QWidget):
         self._seen_epoch = modules.globals.settings_epoch
 
         self._image_label.setText(_("Opening camera..."))
+        self.camera_index = camera_index
         self._cap = VideoCapturer(camera_index)
+        width, height = RESOLUTIONS.get(modules.globals.camera_resolution, RESOLUTIONS["720p"])
         # processEvents keeps the window painted and closable while the camera
         # is being opened, which can take seconds — or never finish.
         if not self._cap.start(
-            PREVIEW_DEFAULT_WIDTH, PREVIEW_DEFAULT_HEIGHT, 60,
+            width, height, 60,
             on_wait=QApplication.processEvents,
         ):
             update_status(

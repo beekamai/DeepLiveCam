@@ -100,6 +100,42 @@ def install_hint() -> Optional[str]:
     return None
 
 
+def cuda_device() -> int:
+    return int(getattr(modules.globals, "gpu_device", 0) or 0)
+
+
+def cuda_provider():
+    """The CUDA provider entry honouring the chosen device (bare when 0:
+    ONNX Runtime's defaults are fastest, and options change nothing else)."""
+    device = cuda_device()
+    if device == 0:
+        return "CUDAExecutionProvider"
+    return ("CUDAExecutionProvider", {"device_id": str(device)})
+
+
+def list_gpus() -> List[str]:
+    """``"0: name (16 GB)"`` per NVIDIA GPU, or an empty list."""
+    try:
+        out = subprocess.run(
+            ["nvidia-smi", "--query-gpu=index,name,memory.total", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=5,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        ).stdout
+    except Exception:
+        return []
+    gpus = []
+    for line in out.strip().splitlines():
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) >= 3:
+            mem = parts[2].replace("MiB", "").strip()
+            try:
+                mem = f"{int(mem) / 1024:.0f} GB"
+            except ValueError:
+                pass
+            gpus.append(f"{parts[0]}: {parts[1]} ({mem})")
+    return gpus
+
+
 def tensorrt_wanted() -> bool:
     """TensorRT is installed, enabled in the settings, and CUDA is the target."""
     if not getattr(modules.globals, "tensorrt", True) or not tensorrt_available():
@@ -121,8 +157,9 @@ def tensorrt_providers(model_path: str = "") -> list:
             "trt_timing_cache_enable": "True",
             "trt_timing_cache_path": ENGINE_CACHE,
             "trt_max_workspace_size": str(WORKSPACE_BYTES),
+            "device_id": str(cuda_device()),
         }),
-        "CUDAExecutionProvider",
+        cuda_provider(),
         "CPUExecutionProvider",
     ]
 

@@ -192,5 +192,15 @@
     "Fit 68 landmarks in 3D every frame (~3 ms): the real yaw and pitch fade the swap past the limits below, no calibration needed": "Подгонять 68 точек в 3D каждый кадр (~3 мс): реальные углы поворота и наклона гасят подмену за порогами ниже, калибровка не нужна",
     "Region (lips to chin)": "Область (от губ до подбородка)",
     "Lips only (keeps a moustache)": "Только губы (усы остаются)",
-    "Region grows from the lips towards the nose and chin; Lips only never rises above the upper lip, so a real moustache stays swapped, and grows downward for a tongue": "Область растёт от губ к носу и подбородку; «Только губы» не поднимается выше верхней губы, так что настоящие усы остаются подменёнными, и растёт вниз под высунутый язык"
+    "Region grows from the lips towards the nose and chin; Lips only never rises above the upper lip, so a real moustache stays swapped, and grows downward for a tongue": "Область растёт от губ к носу и подбородку; «Только губы» не поднимается выше верхней губы, так что настоящие усы остаются подменёнными, и растёт вниз под высунутый язык",
+    "Forehead": "Лоб",
+    "How far above the brows the mask reaches, as a share of the face height": "Насколько выше бровей достаёт маска, в долях высоты лица",
+    "Chin": "Подбородок",
+    "How far below the jaw landmarks the mask reaches (beard, double chin)": "Насколько ниже точек челюсти достаёт маска (борода, второй подбородок)",
+    "GPU:": "GPU:",
+    "default": "по умолчанию",
+    "Which GPU runs the models — takes effect after a restart": "На какой видеокарте работают модели — применяется после перезапуска",
+    "GPU changed — restart the application to apply.": "Видеокарта изменена — перезапустите приложение.",
+    "Resolution:": "Разрешение:",
+    "Camera capture size: lower is faster, higher is sharper": "Размер захвата камеры: меньше — быстрее, больше — чётче"
 }

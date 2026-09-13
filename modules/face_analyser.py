@@ -39,7 +39,7 @@ def get_face_analyser() -> Any:
                     providers=providers,
                     allowed_modules=['detection', 'recognition', 'landmark_2d_106']
                 )
-                FACE_ANALYSER.prepare(ctx_id=0, det_size=DET_SIZE)
+                FACE_ANALYSER.prepare(ctx_id=int(getattr(modules.globals, "gpu_device", 0) or 0), det_size=DET_SIZE)
                 _optimize_det_model(FACE_ANALYSER, providers)
                 _enable_det_cuda_graph(FACE_ANALYSER, providers)
     return FACE_ANALYSER
