@@ -109,6 +109,12 @@ calibration_voice: bool = False
 # Cap on swapped frames per second (0 = every camera frame); the display
 # still shows every camera frame through reprojection.
 max_fps: int = 0
+# 3D head pose per frame (insightface 1k3d68): fade the swap past the real
+# angles and add the 3D silhouette to the mask outline.
+head_pose: bool = True
+head_outline: bool = True
+head_yaw_limit: int = 55
+head_pitch_limit: int = 35
 
 # Face Swapper Specific Options
 face_swapper_enabled: bool = True # General toggle for the swapper processor

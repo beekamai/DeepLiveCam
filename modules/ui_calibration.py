@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
 )
 
 import modules.globals
-from modules import audio_cues, calibration
+from modules import audio_cues, calibration, head_geometry
 from modules.gettext import _
 from modules.face_analyser import detect_one_face_fast, ensure_landmarks
 from modules.video_capture import VideoCapturer
@@ -84,6 +84,7 @@ class _CalibrationWorker(QThread):
             face = detect_one_face_fast(frame)
             if face is not None:
                 ensure_landmarks(frame, [face])
+                head_geometry.estimate(frame, [face])
             completed = self._session.feed(face)
             self.frame_ready.emit(frame, face, completed)
 
@@ -390,6 +391,9 @@ class CalibrationDialog(QDialog):
             neutral = self._session.captured.get("neutral")
             if neutral is not None:
                 text += f"  (neutral {neutral['pose'][0]:+.2f} / {neutral['pose'][1]:.2f})"
+            head = getattr(face, "head_pose", None)
+            if head is not None:
+                text += f"  |  yaw {head.yaw:+.0f}°  pitch {head.pitch:+.0f}°"
         overlay = _draw_overlay(frame, face, text, self._cue())
         self._preview.setPixmap(_to_pixmap(overlay, self._preview.width(), self._preview.height()))
 

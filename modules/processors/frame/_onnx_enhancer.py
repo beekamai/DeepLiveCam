@@ -429,6 +429,12 @@ def face_outline_mask(face: Any, affine: np.ndarray, input_size: int,
     hull = cv2.convexHull(np.vstack([scaled, forehead]).astype(np.int32))
     mask = np.zeros((input_size, input_size), dtype=np.uint8)
     cv2.fillConvexPoly(mask, hull, 255)
+    # The 3D fit's contour stays a silhouette on a turned head where the
+    # 2D jaw points slide inward; the union keeps the far cheek covered.
+    head = getattr(face, "head_pose", None)
+    if head is not None and getattr(modules.globals, "head_outline", True):
+        contour = cv2.transform(head.outline().reshape(1, -1, 2), affine).reshape(-1, 2)
+        cv2.fillConvexPoly(mask, cv2.convexHull(contour.astype(np.int32)), 255)
     # Grow slightly so the feather sits outside the landmarks rather than
     # eating into the jaw, then soften the edge.
     grow = max(3, input_size // 40)

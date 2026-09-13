@@ -309,6 +309,11 @@ def swap_alpha(face: Any) -> float:
     # insightface's Face answers None for any unknown attribute.
     hold = getattr(face, "track_alpha", None)
     hold = 1.0 if hold is None else float(hold)
+    # Real head angles (3D landmark fit) fade the swap past the configured
+    # limits whether or not a profile is active; a profile can only narrow.
+    from modules.head_geometry import pose_alpha
+
+    hold *= pose_alpha(face)
     profile = _ACTIVE
     if profile is None or not getattr(modules.globals, "pose_fade", True):
         return hold

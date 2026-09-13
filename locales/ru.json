@@ -179,5 +179,15 @@
     "Select one or more photos of the source face": "Выберите одно или несколько фото исходного лица",
     "{n} photos, blended by pose": "{n} фото, смешиваются по позе",
     "Swap works with a single source photo.": "Обмен местами работает с одним фото источника.",
-    "None of the chosen photos shows a face — keeping the previous face.": "Ни на одном из выбранных фото нет лица — оставляю прежнее."
+    "None of the chosen photos shows a face — keeping the previous face.": "Ни на одном из выбранных фото нет лица — оставляю прежнее.",
+    "Head pose (3D)": "Поза головы (3D)",
+    "Measure head angles": "Измерять углы головы",
+    "3D outline": "3D-контур",
+    "Add the 3D fit's silhouette to the mask so the far cheek stays covered when the 2D landmarks slide on a turned head": "Добавлять силуэт 3D-подгонки к маске, чтобы дальняя щека оставалась закрытой, когда 2D-точки съезжают на повёрнутой голове",
+    "Fade past yaw": "Гасить за поворотом",
+    "Turn (degrees) beyond which the real face shows through": "Поворот (градусы), за которым проступает настоящее лицо",
+    "Fade past pitch": "Гасить за наклоном",
+    "Tilt (degrees) beyond which the real face shows through": "Наклон (градусы), за которым проступает настоящее лицо",
+    "Loading 3D head pose model...": "Загрузка модели 3D-позы головы...",
+    "Fit 68 landmarks in 3D every frame (~3 ms): the real yaw and pitch fade the swap past the limits below, no calibration needed": "Подгонять 68 точек в 3D каждый кадр (~3 мс): реальные углы поворота и наклона гасят подмену за порогами ниже, калибровка не нужна"
 }

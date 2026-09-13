@@ -23,6 +23,7 @@ A fork of [Deep-Live-Cam](https://github.com/hacksider/Deep-Live-Cam) built arou
 
 ### Features
 
+- 🧊 **3D head pose every frame** — 68 landmarks fitted in 3D give the real yaw / pitch / roll: the swap fades past the angles you set with no calibration, and the 3D silhouette keeps the far cheek in the mask on turns (`docs/head-geometry.md`)
 - 🖼️ **Several photos of one person** as the source — front, turned, up, down: their embeddings are blended by the target's pose, so the identity stays steady and turned faces get the photo taken at that angle (`docs/source-identity.md`)
 - ⚡ **CUDA-graph inference** for the detector, landmarks, swappers and enhancers; the XSeg occluder rebuilt for the GPU (8× faster than the stock graph)
 - 🎯 **Optical-flow tracking** between detections: forty support points over the whole head, forward-backward check, RANSAC — a hand or a mic does not bend the alignment; the face is carried for a second after the detector loses it (deep turn) and fades out instead of cutting
@@ -115,7 +116,7 @@ Settings tabs:
 |---|---|
 | Models | swapper, enhancer, enhancer crop, transparency, sharpness, backend (TensorRT / CUDA graph) |
 | Mask | face outline mask, occlusion mask (XSeg) and its interval, Poisson blend, mask overlay, mouth mask, real blinks, real eyes |
-| Motion | face tracking, low-latency reprojection, calibration profiles and their switches |
+| Motion | face tracking, low-latency reprojection, 3D head pose (angle limits, 3D outline), calibration profiles and their switches |
 | Output | webcam colour fix, FPS counter, mirror, **Max FPS** (cap the swap rate to spare the GPU; the preview still shows every camera frame), language, Destroy |
 
 Everything is remembered in `switch_states.json`.
@@ -189,6 +190,7 @@ AGPL-3.0, as upstream. Models keep their own licences.
 
 ### Возможности
 
+- 🧊 **3D-поза головы в каждом кадре** — 68 точек, подогнанных в 3D, дают реальные углы поворота, наклона и крена: подмена гаснет за заданными градусами без калибровки, а 3D-силуэт держит дальнюю щёку в маске на поворотах (`docs/head-geometry.md`)
 - 🖼️ **Несколько фото одного человека** как источник — анфас, в повороте, сверху, снизу: их эмбеддинги смешиваются по позе цели, идентичность держится ровнее, а повёрнутое лицо получает фото под этим углом (`docs/source-identity.md`)
 - ⚡ **CUDA-графы** для детектора, точек, свапперов и улучшателей; окклюдер XSeg пересобран под GPU (в 8 раз быстрее исходного графа)
 - 🎯 **Трекинг оптическим потоком** между детекциями: сорок опорных точек по всей голове, прямая-обратная проверка, RANSAC — рука или микрофон не искривляют выравнивание; после потери детекции (сильный поворот) лицо ведётся ещё секунду и гаснет, а не обрывается
@@ -281,7 +283,7 @@ python run.py --execution-provider cuda        # coreml на Apple Silicon, cpu 
 |---|---|
 | Модели | сваппер, улучшатель, кроп улучшателя, прозрачность, резкость, бэкенд (TensorRT / CUDA-граф) |
 | Маска | маска по контуру, маска перекрытий (XSeg) и её интервал, Poisson-смешивание, показ маски, маска рта, настоящие моргания, свои глаза |
-| Движение | трекинг лица, репроекция, профили калибровки и их переключатели |
+| Движение | трекинг лица, репроекция, 3D-поза головы (пороги углов, 3D-контур), профили калибровки и их переключатели |
 | Вывод | цветокоррекция веб-камеры, счётчик FPS, зеркало, **Макс. FPS** (потолок частоты подмены, чтобы разгрузить GPU; превью по-прежнему показывает каждый кадр камеры), язык, Закрыть |
 
 Всё запоминается в `switch_states.json`.

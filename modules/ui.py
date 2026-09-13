@@ -56,7 +56,7 @@ from PySide6.QtWidgets import (
 )
 
 import modules.globals
-from modules import source_identity
+from modules import head_geometry, source_identity
 from modules import calibration
 from modules import enhancer_registry
 from modules import swapper_registry
@@ -457,6 +457,10 @@ def save_switch_states():
         "language": _LANG.current_language if _LANG is not None else "en",
         "tensorrt": modules.globals.tensorrt,
         "max_fps": modules.globals.max_fps,
+        "head_pose": modules.globals.head_pose,
+        "head_outline": modules.globals.head_outline,
+        "head_yaw_limit": modules.globals.head_yaw_limit,
+        "head_pitch_limit": modules.globals.head_pitch_limit,
         "calibration_sounds": modules.globals.calibration_sounds,
         "calibration_voice": modules.globals.calibration_voice,
     }
@@ -513,6 +517,10 @@ def load_switch_states():
         modules.globals.reprojection = state.get("reprojection", True)
         modules.globals.tensorrt = state.get("tensorrt", True)
         modules.globals.max_fps = max(0, min(60, int(state.get("max_fps", 0))))
+        modules.globals.head_pose = state.get("head_pose", True)
+        modules.globals.head_outline = state.get("head_outline", True)
+        modules.globals.head_yaw_limit = max(30, min(90, int(state.get("head_yaw_limit", 55))))
+        modules.globals.head_pitch_limit = max(15, min(60, int(state.get("head_pitch_limit", 35))))
         modules.globals.calibration_sounds = state.get("calibration_sounds", True)
         modules.globals.calibration_voice = state.get("calibration_voice", False)
         # A profile named on the command line wins over the remembered one.
@@ -1131,6 +1139,37 @@ class MainWindow(QMainWindow):
         )
         grid.addWidget(self.sw_reprojection, 1, 0, 1, 2)
 
+        head = QGroupBox(_("Head pose (3D)"))
+        hgrid = QGridLayout(head)
+        hgrid.setHorizontalSpacing(12)
+        hgrid.setVerticalSpacing(8)
+        hgrid.setColumnStretch(1, 1)
+        self.sw_head_pose = self._switch(
+            "head_pose", "Measure head angles",
+            "Fit 68 landmarks in 3D every frame (~3 ms): the real yaw and "
+            "pitch fade the swap past the limits below, no calibration needed",
+        )
+        hgrid.addWidget(self.sw_head_pose, 0, 0, 1, 3)
+        self.sw_head_outline = self._switch(
+            "head_outline", "3D outline",
+            "Add the 3D fit's silhouette to the mask so the far cheek stays "
+            "covered when the 2D landmarks slide on a turned head",
+        )
+        hgrid.addWidget(self.sw_head_outline, 1, 0, 1, 3)
+        hgrid.addWidget(QLabel(_("Fade past yaw")), 2, 0)
+        self.s_yaw_limit = self._slider(30, 90, modules.globals.head_yaw_limit, 1, self._on_yaw_limit)
+        self.s_yaw_limit.setToolTip(_("Turn (degrees) beyond which the real face shows through"))
+        hgrid.addWidget(self.s_yaw_limit, 2, 1)
+        self.l_yaw_limit = QLabel(f"{modules.globals.head_yaw_limit}°")
+        hgrid.addWidget(self.l_yaw_limit, 2, 2)
+        hgrid.addWidget(QLabel(_("Fade past pitch")), 3, 0)
+        self.s_pitch_limit = self._slider(15, 60, modules.globals.head_pitch_limit, 1, self._on_pitch_limit)
+        self.s_pitch_limit.setToolTip(_("Tilt (degrees) beyond which the real face shows through"))
+        hgrid.addWidget(self.s_pitch_limit, 3, 1)
+        self.l_pitch_limit = QLabel(f"{modules.globals.head_pitch_limit}°")
+        hgrid.addWidget(self.l_pitch_limit, 3, 2)
+        grid.addWidget(head, 2, 0, 1, 2)
+
         calib = QGroupBox(_("Calibration"))
         cgrid = QGridLayout(calib)
         cgrid.setHorizontalSpacing(12)
@@ -1178,11 +1217,21 @@ class MainWindow(QMainWindow):
             "lips do not shrink or grow the swapped area",
         )
         cgrid.addWidget(self.sw_stable, 5, 0, 1, 3)
-        grid.addWidget(calib, 2, 0, 1, 2)
+        grid.addWidget(calib, 3, 0, 1, 2)
         self._refresh_profiles()
 
-        grid.setRowStretch(3, 1)
+        grid.setRowStretch(4, 1)
         return page
+
+    def _on_yaw_limit(self, value: float) -> None:
+        modules.globals.head_yaw_limit = int(value)
+        self.l_yaw_limit.setText(f"{int(value)}°")
+        save_switch_states()
+
+    def _on_pitch_limit(self, value: float) -> None:
+        modules.globals.head_pitch_limit = int(value)
+        self.l_pitch_limit.setText(f"{int(value)}°")
+        save_switch_states()
 
     # ── output tab ───────────────────────────────────────────────────────
 
@@ -1448,6 +1497,7 @@ class MainWindow(QMainWindow):
         from modules.face_occluder import release as release_occluder
 
         release_occluder()
+        head_geometry.release()
         _settings_changed()
         save_switch_states()
         update_status(_("Backend: {backend}. Models reload on next use; restart Live to apply.")
@@ -1934,6 +1984,10 @@ class _ProcessingWorker(QThread):
                     or modules.globals.blink_reveal or modules.globals.eye_reveal > 0
                 ):
                     ensure_landmarks(temp_frame, cached_faces)
+                if cached_faces:
+                    # Real head angles for the fade and the 3D silhouette
+                    # for the outline; ~3 ms, skipped when switched off.
+                    head_geometry.estimate(temp_frame, cached_faces)
 
                 for fp in frame_processors:
                     enhancer_key = enhancer_registry.NAME_TO_KEY.get(fp.NAME)

@@ -410,6 +410,8 @@ class FaceTracker:
         # consumers recompute instead of using stale positions.
         if getattr(face, "landmark_2d_106", None) is not None:
             face.landmark_2d_106 = None
+        if getattr(face, "head_pose", None) is not None:
+            face.head_pose = None
         if self._miss_since is None:
             face.track_alpha = 1.0
         else:
