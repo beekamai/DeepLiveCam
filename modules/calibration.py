@@ -47,9 +47,13 @@ STEP_PROMPTS = {
 # Frames averaged per capture: enough to cancel landmark jitter, short enough
 # that the user does not have to hold an awkward pose.
 CAPTURE_FRAMES = 12
-# Below this fraction of the recorded extreme the swap is fully on; at the
-# extreme it is fully off.
-DEFAULT_FADE_START = 0.75
+# The captured extremes are where the swap should *still hold*: it stays
+# fully on up to them and fades out over this fraction of the range beyond
+# (0.3 = gone at 130 % of the extreme).
+DEFAULT_FADE_SPAN = 0.3
+# Pose distance (in units of the calibrated range) at which a reference
+# stops contributing to the blended outline.
+REFERENCE_POSE_SCALE = 0.15
 # RANSAC reprojection threshold, in crop widths, for matching live landmarks
 # to the reference outline.  Above it a landmark counts as pulled away.
 REFERENCE_TOLERANCE = 0.02
@@ -66,13 +70,21 @@ class CalibrationProfile:
     reference: np.ndarray                 # (106, 2) in normalised arcface_128 space
     neutral: Tuple[float, float]          # (yaw, pitch) proxies looking straight
     limits: Dict[str, float] = field(default_factory=dict)   # step -> proxy value
-    fade_start: float = DEFAULT_FADE_START
+    fade_span: float = DEFAULT_FADE_SPAN
     created: str = ""
     reference_kps: Optional[np.ndarray] = None   # (5, 2), same space as reference
+    # Every captured pose: step -> {"outline": (106, 2), "kps": (5, 2), "pose": (yaw, pitch)}.
+    # The outline of a turned head differs from the neutral one beyond what an
+    # affine can absorb, so the reference is blended from the nearest poses.
+    references: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.reference_kps is None:
             self.reference_kps = self.reference[list(KPS_FROM_LANDMARKS)].copy()
+        if "neutral" not in self.references:
+            self.references["neutral"] = {
+                "outline": self.reference, "kps": self.reference_kps, "pose": tuple(self.neutral),
+            }
 
     def to_json(self) -> Dict[str, Any]:
         return {
@@ -83,7 +95,15 @@ class CalibrationProfile:
             "reference_kps": np.asarray(self.reference_kps, dtype=np.float32).round(5).tolist(),
             "neutral": [float(self.neutral[0]), float(self.neutral[1])],
             "limits": {k: float(v) for k, v in self.limits.items()},
-            "fade_start": float(self.fade_start),
+            "fade_span": float(self.fade_span),
+            "references": {
+                step: {
+                    "outline": np.asarray(r["outline"], dtype=np.float32).round(5).tolist(),
+                    "kps": np.asarray(r["kps"], dtype=np.float32).round(5).tolist(),
+                    "pose": [float(r["pose"][0]), float(r["pose"][1])],
+                }
+                for step, r in self.references.items()
+            },
         }
 
     @classmethod
@@ -93,14 +113,25 @@ class CalibrationProfile:
             raise ValueError("reference outline is malformed")
         neutral = data.get("neutral") or [0.0, 0.5]
         kps = data.get("reference_kps")
+        references = {}
+        for step, r in (data.get("references") or {}).items():
+            outline = np.asarray(r.get("outline"), dtype=np.float32)
+            if outline.shape != reference.shape:
+                continue
+            references[step] = {
+                "outline": outline,
+                "kps": np.asarray(r.get("kps"), dtype=np.float32),
+                "pose": (float(r["pose"][0]), float(r["pose"][1])),
+            }
         return cls(
             reference_kps=None if kps is None else np.asarray(kps, dtype=np.float32),
             name=str(data.get("name") or "profile"),
             reference=reference,
             neutral=(float(neutral[0]), float(neutral[1])),
             limits={k: float(v) for k, v in (data.get("limits") or {}).items()},
-            fade_start=float(data.get("fade_start", DEFAULT_FADE_START)),
+            fade_span=float(data.get("fade_span", DEFAULT_FADE_SPAN)),
             created=str(data.get("created") or ""),
+            references=references,
         )
 
     # ── pose ─────────────────────────────────────────────────────────────
@@ -115,18 +146,40 @@ class CalibrationProfile:
         )
 
     def swap_alpha(self, kps: Any) -> float:
-        """1 while the pose is inside the calibrated range, 0 past the
-        extremes, a smooth ramp in between."""
+        """1 up to the calibrated extreme — that is where the swap was asked
+        to still hold — then a smooth ramp to 0 over ``fade_span`` beyond."""
         if not self.limits:
             return 1.0
         turn = self.turn(kps)
-        start = min(max(self.fade_start, 0.0), 0.99)
-        if turn <= start:
+        span = max(self.fade_span, 0.05)
+        if turn <= 1.0:
             return 1.0
-        if turn >= 1.0:
+        if turn >= 1.0 + span:
             return 0.0
-        t = (turn - start) / (1.0 - start)
+        t = (turn - 1.0) / span
         return float(1.0 - t * t * (3.0 - 2.0 * t))
+
+    def _pose_scale(self) -> Tuple[float, float]:
+        """Half-ranges of the calibrated turns, for pose distances."""
+        yaw = [abs(self.limits[k] - self.neutral[0]) for k in ("left", "right") if k in self.limits]
+        pitch = [abs(self.limits[k] - self.neutral[1]) for k in ("up", "down") if k in self.limits]
+        return (max(yaw) if yaw else 0.3, max(pitch) if pitch else 0.4)
+
+    def blended(self, kps: Any) -> Tuple[np.ndarray, np.ndarray]:
+        """Reference outline and keypoints for this head pose: the captured
+        poses weighted by their closeness to the current one."""
+        if len(self.references) == 1:
+            return self.reference, self.reference_kps
+        yaw, pitch = pose_proxies(kps)
+        sy, sp = self._pose_scale()
+        weights = []
+        for r in self.references.values():
+            d = ((yaw - r["pose"][0]) / sy) ** 2 + ((pitch - r["pose"][1]) / sp) ** 2
+            weights.append(1.0 / (d + REFERENCE_POSE_SCALE ** 2))
+        total = float(sum(weights))
+        outline = sum(w * r["outline"] for w, r in zip(weights, self.references.values())) / total
+        kps5 = sum(w * r["kps"] for w, r in zip(weights, self.references.values())) / total
+        return outline.astype(np.float32), kps5.astype(np.float32)
 
 
 def _turn_ratio(value: float, neutral: float,
@@ -194,7 +247,7 @@ def normalised_landmarks(face: Any) -> Optional[np.ndarray]:
     ).reshape(-1, 2)
 
 
-def refine_outline(points: np.ndarray, frame_key: str) -> np.ndarray:
+def refine_outline(points: np.ndarray, frame_key: str, face: Any = None) -> np.ndarray:
     """Replace landmarks that wandered off the calibrated outline.
 
     An affine fit from the reference to the live points absorbs whatever the
@@ -209,6 +262,12 @@ def refine_outline(points: np.ndarray, frame_key: str) -> np.ndarray:
     if profile is None or not getattr(modules.globals, "reference_outline", True):
         return points
     reference = profile.reference
+    if face is not None:
+        kps = getattr(face, "raw_kps", None)
+        if kps is None:
+            kps = getattr(face, "kps", None)
+        if kps is not None:
+            reference = profile.blended(kps)[0]
     if reference.shape != points.shape:
         return points
     affine, inliers = cv2.estimateAffine2D(
@@ -285,12 +344,13 @@ def stable_kps(face: Any) -> Optional[np.ndarray]:
     kps = np.asarray(kps, dtype=np.float32)
     if kps.shape != (5, 2):
         return None
+    reference_kps = profile.blended(kps)[1]
     affine = cv2.estimateAffinePartial2D(
-        profile.reference_kps[:3], kps[:3], method=cv2.LMEDS,
+        reference_kps[:3], kps[:3], method=cv2.LMEDS,
     )[0]
     if affine is None:
         return None
-    corners = cv2.transform(profile.reference_kps[3:5].reshape(1, -1, 2), affine).reshape(-1, 2)
+    corners = cv2.transform(reference_kps[3:5].reshape(1, -1, 2), affine).reshape(-1, 2)
     # Height from the detector's own corners: they arrive smoothed by the
     # tracker, whereas the 106 landmarks are recomputed raw every frame and
     # their jitter showed up as a tremor of the whole swap.
@@ -417,21 +477,21 @@ class CalibrationSession:
         if kps is None:
             return None
         self._poses.append(pose_proxies(kps))
-        if self._armed == "neutral":
-            outline = normalised_landmarks(face)
-            if outline is None:
-                self._poses.pop()
-                return None
-            self._outlines.append(outline)
-            self._kps.append(normalised_kps(face))
+        outline = normalised_landmarks(face)
+        if outline is None:
+            self._poses.pop()
+            return None
+        self._outlines.append(outline)
+        self._kps.append(normalised_kps(face))
         if len(self._poses) < self.frames_per_capture:
             return None
         step = self._armed
         pose = np.median(np.asarray(self._poses, dtype=np.float32), axis=0)
-        record: Dict[str, Any] = {"pose": (float(pose[0]), float(pose[1]))}
-        if step == "neutral":
-            record["outline"] = np.median(np.stack(self._outlines), axis=0).astype(np.float32)
-            record["kps"] = np.median(np.stack(self._kps), axis=0).astype(np.float32)
+        record: Dict[str, Any] = {
+            "pose": (float(pose[0]), float(pose[1])),
+            "outline": np.median(np.stack(self._outlines), axis=0).astype(np.float32),
+            "kps": np.median(np.stack(self._kps), axis=0).astype(np.float32),
+        }
         self.captured[step] = record
         self.cancel()
         return step
@@ -442,7 +502,7 @@ class CalibrationSession:
     def can_build(self) -> bool:
         return "neutral" in self.captured
 
-    def build(self, name: str, fade_start: float = DEFAULT_FADE_START) -> CalibrationProfile:
+    def build(self, name: str, fade_span: float = DEFAULT_FADE_SPAN) -> CalibrationProfile:
         if not self.can_build():
             raise ValueError("the neutral pose has not been captured")
         neutral = self.captured["neutral"]
@@ -459,6 +519,7 @@ class CalibrationSession:
             reference_kps=neutral["kps"],
             neutral=neutral["pose"],
             limits=limits,
-            fade_start=fade_start,
+            fade_span=fade_span,
             created=time.strftime("%Y-%m-%d %H:%M"),
+            references={step: dict(r) for step, r in self.captured.items()},
         )

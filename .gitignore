@@ -26,13 +26,10 @@ faceswap/
 .vscode/
 switch_states.json
 /models
-install.bat
 /.claude
-*.bat
 
 # local runtime state and large binaries
 calibration/
 ffmpeg.exe
-.wheels/
 .tmp-*
 media/

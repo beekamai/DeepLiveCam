@@ -34,12 +34,29 @@ absolute angles never enter the picture.
 
 ## Fade to the real face
 
-`swap_alpha(face)` returns 1 inside the calibrated range, 0 past the recorded
-extreme, a smoothstep between `fade_start` and the extreme.  `swap_face` and
-`enhance_face_onnx` multiply their paste mask by it; at 0 they return the
-frame untouched **without running the model**, so a turned-away head also
-costs nothing.  Without an active profile (or with `pose_fade` off) alpha is
-always 1.
+The captured extremes are where the swap should *still hold* — that is what
+the prompt asks for — so `swap_alpha(face)` returns 1 all the way up to the
+extreme and only then ramps (smoothstep) to 0 over `fade_span` of the range
+beyond it (default +30 %; the dialog's **Fade beyond limit** slider).  The
+first version faded from 75 % *up to* the extreme, which read as the swap
+letting go before the calibrated point.  `swap_face` and `enhance_face_onnx`
+multiply their paste mask by the alpha; at 0 they return the frame untouched
+**without running the model**.  Without an active profile (or with
+`pose_fade` off) alpha is always 1.  The tracker's hold-through-a-miss fade
+(`face.track_alpha`, see tracking.md) multiplies in as well.
+
+## Multi-pose references
+
+Every captured pose — neutral and the four extremes — stores its outline,
+keypoints and pose proxies (`references` in the JSON; `reference` /
+`reference_kps` remain the neutral copies for older files).  At runtime
+`profile.blended(kps)` weights the captured poses by their closeness to the
+current pose (inverse squared distance in units of the calibrated range,
+`REFERENCE_POSE_SCALE` floor) and blends outline and keypoints from them.
+The reference outline and the expression-proof corners therefore come from
+a head that was *already turned the same way*, instead of from the neutral
+face stretched by an affine.  Profiles captured before this store only the
+neutral pose and behave as before; recalibrating fills the rest.
 
 ## Reference outline
 

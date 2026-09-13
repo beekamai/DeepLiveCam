@@ -396,7 +396,7 @@ def face_outline_mask(face: Any, affine: np.ndarray, input_size: int,
 
     # With a calibrated reference, landmarks a finger or shadow pulled away
     # are put back where the person's own outline says they belong.
-    points = calibration.refine_outline(points, frame_key)
+    points = calibration.refine_outline(points, frame_key, face)
 
     state = _OUTLINE.setdefault(frame_key, {"points": None, "rejected": 0})
     previous = state["points"]

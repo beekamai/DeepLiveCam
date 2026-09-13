@@ -681,8 +681,17 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
 
-        layout.addLayout(self._build_image_row())
-        layout.addWidget(self._build_run_card())
+        top = QHBoxLayout()
+        top.setSpacing(16)
+        top.addLayout(self._build_source_column())
+        self._modes = QTabWidget()
+        self._modes.addTab(self._build_live_page(), _("Live"))
+        self._modes.addTab(self._build_media_page(), _("Photo / Video"))
+        self._modes.setToolTip(_("Live swaps your webcam; Photo / Video processes a file"))
+        # Takes whatever width is left of the source column, never more.
+        self._modes.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        top.addWidget(self._modes, 1)
+        layout.addLayout(top)
 
         self._tabs = QTabWidget()
         self._tabs.addTab(self._build_models_tab(), _("Models"))
@@ -709,7 +718,9 @@ class MainWindow(QMainWindow):
     # Two previews, the swap button and the margins must fit the window
     # width; below that the previews shrink instead of the window clipping.
     PREVIEW_MIN = 120
-    PREVIEW_CHROME = 16 * 2 + 44 + 16 * 2 + 24
+    # source preview, the mode tab's margins, the target preview and its
+    # buttons column must share the window width
+    PREVIEW_CHROME = 16 * 2 + 16 + 16 * 2 + 24
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
@@ -762,16 +773,13 @@ class MainWindow(QMainWindow):
         grid.setColumnStretch(1, 1)
         return page, grid
 
-    # ── image row ────────────────────────────────────────────────────────
+    # ── source column ────────────────────────────────────────────────────
 
-    def _build_image_row(self) -> QHBoxLayout:
-        row = QHBoxLayout()
-        row.setSpacing(16)
-
-        src_col = QVBoxLayout()
+    def _build_source_column(self) -> QVBoxLayout:
+        col = QVBoxLayout()
         self.source_label = _make_image_drop(_("Source face"), self._preview_size)
-        src_col.addWidget(self.source_label, alignment=Qt.AlignmentFlag.AlignCenter)
-        src_row = QHBoxLayout()
+        col.addWidget(self.source_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        row = QHBoxLayout()
         self.btn_select_source = QPushButton(_("Select a face"))
         self.btn_select_source.setToolTip(
             _("Choose the source face image to swap onto the target")
@@ -784,60 +792,26 @@ class MainWindow(QMainWindow):
             _("Get a random face from thispersondoesnotexist.com")
         )
         self.btn_random_face.clicked.connect(self._on_random_face)
-        src_row.addWidget(self.btn_select_source)
-        src_row.addWidget(self.btn_random_face)
-        src_col.addLayout(src_row)
+        row.addWidget(self.btn_select_source)
+        row.addWidget(self.btn_random_face)
+        col.addLayout(row)
+        col.addStretch(1)
+        return col
 
-        swap_col = QVBoxLayout()
-        swap_col.addStretch(1)
-        self.btn_swap = QPushButton("↔")
-        self.btn_swap.setObjectName("secondary")
-        self.btn_swap.setFixedSize(44, 44)
-        self.btn_swap.setToolTip(_("Swap source and target images"))
-        self.btn_swap.clicked.connect(self._on_swap_paths)
-        swap_col.addWidget(self.btn_swap, alignment=Qt.AlignmentFlag.AlignCenter)
-        swap_col.addStretch(1)
+    # ── live page: camera, Live, Calibrate ───────────────────────────────
 
-        tgt_col = QVBoxLayout()
-        self.target_label = _make_image_drop(_("Target"), self._preview_size)
-        tgt_col.addWidget(self.target_label, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.btn_select_target = QPushButton(_("Select a target"))
-        self.btn_select_target.setToolTip(
-            _("Choose the target image or video to apply face swap to")
-        )
-        self.btn_select_target.clicked.connect(self._on_select_target)
-        tgt_col.addWidget(self.btn_select_target)
+    def _build_live_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setSpacing(10)
 
-        row.addStretch(1)
-        row.addLayout(src_col)
-        row.addLayout(swap_col)
-        row.addLayout(tgt_col)
-        row.addStretch(1)
-        return row
-
-    # ── run card: start / preview / destroy + camera / live ──────────────
-
-    def _build_run_card(self) -> QGroupBox:
-        card = QGroupBox(_("Run"))
-        layout = QVBoxLayout(card)
-        layout.setSpacing(8)
-
-        row = QHBoxLayout()
-        self.btn_start = QPushButton(_("Start"))
-        self.btn_start.setToolTip(_("Begin processing the target image/video with selected face"))
-        self.btn_start.clicked.connect(self._on_start)
-        self.btn_preview = QPushButton(_("Preview"))
-        self.btn_preview.setObjectName("secondary")
-        self.btn_preview.setToolTip(_("Show/hide a preview of the processed output"))
-        self.btn_preview.clicked.connect(self._on_toggle_preview)
-        self.btn_destroy = QPushButton(_("Destroy"))
-        self.btn_destroy.setObjectName("danger")
-        self.btn_destroy.setToolTip(_("Stop processing and close the application"))
-        self.btn_destroy.clicked.connect(lambda: self._destroy_cb())
-        row.addWidget(self.btn_start)
-        row.addWidget(self.btn_preview)
-        row.addWidget(self.btn_destroy)
-        layout.addLayout(row)
+        hint = QLabel(_("Pick a source face, choose the camera and press Live. "
+                        "Calibrate once for your own face."))
+        hint.setWordWrap(True)
+        hint.setObjectName("statusLabel")
+        hint.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        layout.addWidget(hint)
 
         cam_row = QHBoxLayout()
         cam_row.addWidget(QLabel(_("Camera:")))
@@ -852,20 +826,79 @@ class MainWindow(QMainWindow):
             cam_ok = True
         self.cb_camera.setToolTip(_("Select which camera to use for live mode"))
         cam_row.addWidget(self.cb_camera, 1)
+        layout.addLayout(cam_row)
+
+        buttons = QHBoxLayout()
         self.btn_live = QPushButton(_("Live"))
         self.btn_live.setEnabled(cam_ok)
         self.btn_live.setToolTip(_("Start real-time face swap using webcam"))
         self.btn_live.clicked.connect(self._on_live)
-        cam_row.addWidget(self.btn_live)
         self.btn_calibrate_quick = QPushButton(_("Calibrate…"))
         self.btn_calibrate_quick.setObjectName("secondary")
         self.btn_calibrate_quick.setEnabled(cam_ok)
         self.btn_calibrate_quick.setToolTip(_("A minute in front of the camera: your face outline "
                                               "and how far you can turn before the swap lets go"))
         self.btn_calibrate_quick.clicked.connect(self._on_calibrate)
-        cam_row.addWidget(self.btn_calibrate_quick)
-        layout.addLayout(cam_row)
-        return card
+        buttons.addWidget(self.btn_live, 2)
+        buttons.addWidget(self.btn_calibrate_quick, 1)
+        layout.addLayout(buttons)
+        layout.addStretch(1)
+        return page
+
+    # ── photo / video page: target, Start, Preview, output options ───────
+
+    def _build_media_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setSpacing(8)
+
+        self.target_label = _make_image_drop(_("Target"), self._preview_size)
+        layout.addWidget(self.target_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        tgt_row = QHBoxLayout()
+        self.btn_select_target = QPushButton(_("Select a target"))
+        self.btn_select_target.setToolTip(
+            _("Choose the target image or video to apply face swap to")
+        )
+        self.btn_select_target.clicked.connect(self._on_select_target)
+        self.btn_swap = QPushButton("↔")
+        self.btn_swap.setObjectName("secondary")
+        self.btn_swap.setFixedWidth(40)
+        self.btn_swap.setToolTip(_("Swap source and target images"))
+        self.btn_swap.clicked.connect(self._on_swap_paths)
+        tgt_row.addWidget(self.btn_select_target, 1)
+        tgt_row.addWidget(self.btn_swap)
+        layout.addLayout(tgt_row)
+
+        actions = QHBoxLayout()
+        self.btn_start = QPushButton(_("Start"))
+        self.btn_start.setToolTip(_("Begin processing the target image/video with selected face"))
+        self.btn_start.clicked.connect(self._on_start)
+        self.btn_preview = QPushButton(_("Preview"))
+        self.btn_preview.setObjectName("secondary")
+        self.btn_preview.setToolTip(_("Show/hide a preview of the processed output"))
+        self.btn_preview.clicked.connect(self._on_toggle_preview)
+        actions.addWidget(self.btn_start, 1)
+        actions.addWidget(self.btn_preview, 1)
+        layout.addLayout(actions)
+
+        self.sw_keep_fps = self._switch("keep_fps", "Keep fps",
+                                        "Output video keeps the original frame rate")
+        self.sw_keep_audio = self._switch("keep_audio", "Keep audio",
+                                          "Copy audio track from the source video to output")
+        self.sw_keep_frames = self._switch("keep_frames", "Keep frames",
+                                           "Keep extracted frames on disk after processing")
+        self.sw_many_faces = self._switch("many_faces", "Many faces",
+                                          "Swap every detected face, not just the primary one")
+        # Map faces is special — closes mapper when toggled off.
+        self.sw_map_faces = _Switch(_("Map faces"), modules.globals.map_faces,
+                                    _("Manually assign which source face maps to which target face"))
+        self.sw_map_faces.toggled.connect(self._on_map_faces_toggled)
+        for w in (self.sw_keep_fps, self.sw_keep_audio, self.sw_keep_frames,
+                  self.sw_many_faces, self.sw_map_faces):
+            layout.addWidget(w)
+        layout.addStretch(1)
+        return page
 
     # ── models tab ───────────────────────────────────────────────────────
 
@@ -1092,46 +1125,34 @@ class MainWindow(QMainWindow):
     def _build_output_tab(self) -> QWidget:
         page, grid = self._tab()
 
-        self.sw_keep_fps = self._switch("keep_fps", "Keep fps",
-                                        "Output video keeps the original frame rate")
-        self.sw_keep_audio = self._switch("keep_audio", "Keep audio",
-                                          "Copy audio track from the source video to output")
-        self.sw_keep_frames = self._switch("keep_frames", "Keep frames",
-                                           "Keep extracted frames on disk after processing")
-        self.sw_many_faces = self._switch("many_faces", "Many faces",
-                                          "Swap every detected face, not just the primary one")
         self.sw_color_fix = self._switch("color_correction", "Fix Blueish Cam",
                                          "Fix blue/green color cast from some webcams")
         self.sw_show_fps = self._switch("show_fps", "Show FPS",
                                         "Display frames-per-second counter on the live preview")
         self.sw_mirror = self._switch("live_mirror", "Mirror camera",
                                       "Flip the live preview horizontally, like a front camera")
-        # Map faces is special — closes mapper when toggled off.
-        self.sw_map_faces = _Switch(_("Map faces"), modules.globals.map_faces,
-                                    _("Manually assign which source face maps to which target face"))
-        self.sw_map_faces.toggled.connect(self._on_map_faces_toggled)
-
-        items = [
-            self.sw_keep_fps, self.sw_keep_audio,
-            self.sw_keep_frames, self.sw_many_faces,
-            self.sw_map_faces, self.sw_color_fix,
-            self.sw_show_fps, self.sw_mirror,
-        ]
+        items = [self.sw_color_fix, self.sw_show_fps, self.sw_mirror]
         for i, w in enumerate(items):
             grid.addWidget(w, i // 2, i % 2)
-        row = len(items) // 2
+        row = (len(items) + 1) // 2
         lang_row = QHBoxLayout()
         lang_row.addWidget(QLabel(_("Language:")))
         self.cb_language = QComboBox()
         self.cb_language.addItems(list(LANGUAGES.values()))
         current = _LANG.current_language if _LANG is not None else "en"
         self.cb_language.setCurrentText(LANGUAGES.get(current, "English"))
-        self.cb_language.setToolTip(_("Applies after a restart"))
+        self.cb_language.setToolTip(_("Switches the interface language"))
         self.cb_language.currentTextChanged.connect(self._on_language_change)
         lang_row.addWidget(self.cb_language, 1)
         grid.addLayout(lang_row, row, 0, 1, 2)
+
+        self.btn_destroy = QPushButton(_("Destroy"))
+        self.btn_destroy.setObjectName("danger")
+        self.btn_destroy.setToolTip(_("Stop processing and close the application"))
+        self.btn_destroy.clicked.connect(lambda: self._destroy_cb())
+        grid.addWidget(self.btn_destroy, row + 1, 0, 1, 2)
         grid.setColumnStretch(0, 1)
-        grid.setRowStretch(row + 1, 1)
+        grid.setRowStretch(row + 2, 1)
         return page
 
     # ── calibration ──────────────────────────────────────────────────────
@@ -1328,9 +1349,14 @@ class MainWindow(QMainWindow):
     def _on_language_change(self, label: str) -> None:
         global _LANG
         code = next((c for c, name in LANGUAGES.items() if name == label), "en")
+        if _LANG is not None and code == _LANG.current_language:
+            return
         _LANG = set_language(code)
         save_switch_states()
-        update_status(_("Language will apply after a restart."))
+        # Every label was translated at construction: build a fresh window
+        # in this one's place.  Preview and live windows are separate
+        # top-levels and keep running.
+        QTimer.singleShot(0, _rebuild_main_window)
 
     def _on_occlusion_interval_change(self, index: int) -> None:
         modules.globals.occlusion_interval = index + 1
@@ -1475,8 +1501,10 @@ class MainWindow(QMainWindow):
             _open_live_mapper_dialog(camera_index, modules.globals.source_target_map)
 
     def closeEvent(self, event):
-        # Treat OS-level close as Destroy click
-        self._destroy_cb()
+        # Treat OS-level close as Destroy click — unless the window is being
+        # swapped for a retranslated copy.
+        if not getattr(self, "_replaced", False):
+            self._destroy_cb()
         event.accept()
 
 
@@ -1522,19 +1550,30 @@ class PreviewWindow(QWidget):
     def refresh_frame(self, frame_number: int = 0) -> None:
         from modules.processors.frame.face_swapper import needs_source_face
 
-        if not modules.globals.target_path:
+        target = modules.globals.target_path
+        if not target:
             return
         if needs_source_face() and not modules.globals.source_path:
             return
         update_status("Processing...")
-        temp_frame = get_video_frame(modules.globals.target_path, frame_number)
+        if is_image(target):
+            temp_frame = imread_unicode(target)
+        else:
+            temp_frame = get_video_frame(target, frame_number)
+        if temp_frame is None:
+            update_status("Could not read the target — unsupported file or codec.")
+            return
         if modules.globals.nsfw_filter and check_and_ignore_nsfw(temp_frame):
             return
+        source_face = None
+        if needs_source_face():
+            source_face = get_one_face(imread_unicode(modules.globals.source_path))
+            if source_face is None:
+                update_status("No face in the selected source image.")
+                return
         from modules.processors.frame.core import get_frame_processors_modules as _gfpm
         for fp in _gfpm(modules.globals.frame_processors):
-            temp_frame = fp.process_frame(
-                get_one_face(imread_unicode(modules.globals.source_path)), temp_frame
-            )
+            temp_frame = fp.process_frame(source_face, temp_frame)
         # Fit to current widget size while preserving aspect ratio.
         h, w = temp_frame.shape[:2]
         bound_w = min(PREVIEW_MAX_WIDTH, max(self.width(), PREVIEW_DEFAULT_WIDTH))
@@ -2159,6 +2198,31 @@ def close_mapper_window() -> None:
 
 
 # ─── entry point ─────────────────────────────────────────────────────────
+
+
+def _rebuild_main_window() -> None:
+    """Replace the main window with one built in the current language."""
+    global _MAIN
+    old = _MAIN
+    if old is None:
+        return
+    fresh = MainWindow(old._start_cb, old._destroy_cb)
+    fresh.setGeometry(old.geometry())
+    fresh._tabs.setCurrentIndex(old._tabs.currentIndex())
+    fresh._modes.setCurrentIndex(old._modes.currentIndex())
+    if _BRIDGE is not None:
+        try:
+            _BRIDGE.statusChanged.disconnect(old.set_status)
+        except (RuntimeError, TypeError):
+            pass
+        _BRIDGE.statusChanged.connect(fresh.set_status)
+    if modules.globals.source_path or modules.globals.target_path:
+        fresh._refresh_previews()
+    _MAIN = fresh
+    fresh.show()
+    old._replaced = True
+    old.close()
+    old.deleteLater()
 
 
 class _Window:

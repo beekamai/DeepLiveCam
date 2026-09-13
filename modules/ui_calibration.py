@@ -221,14 +221,14 @@ class CalibrationDialog(QDialog):
         layout.addWidget(self._progress)
 
         fade_row = QHBoxLayout()
-        fade_row.addWidget(QLabel(_("Fade starts at")))
+        fade_row.addWidget(QLabel(_("Fade beyond limit")))
         self._fade = QSlider(Qt.Orientation.Horizontal)
-        self._fade.setRange(40, 95)
-        self._fade.setValue(int(calibration.DEFAULT_FADE_START * 100))
-        self._fade.setToolTip(_("Percentage of the captured turn at which the swap starts "
-                                "fading to the real face"))
-        self._fade_value = QLabel(f"{self._fade.value()}%")
-        self._fade.valueChanged.connect(lambda v: self._fade_value.setText(f"{v}%"))
+        self._fade.setRange(10, 60)
+        self._fade.setValue(int(calibration.DEFAULT_FADE_SPAN * 100))
+        self._fade.setToolTip(_("How far past the captured turn the swap keeps fading "
+                                "before the real face shows fully"))
+        self._fade_value = QLabel(f"+{self._fade.value()}%")
+        self._fade.valueChanged.connect(lambda v: self._fade_value.setText(f"+{v}%"))
         fade_row.addWidget(self._fade, 1)
         fade_row.addWidget(self._fade_value)
         layout.addLayout(fade_row)
@@ -350,7 +350,7 @@ class CalibrationDialog(QDialog):
     def _on_save(self) -> None:
         name = self._name.text().strip() or "me"
         try:
-            profile = self._session.build(name, fade_start=self._fade.value() / 100.0)
+            profile = self._session.build(name, fade_span=self._fade.value() / 100.0)
             calibration.save_profile(profile)
         except (ValueError, OSError) as error:
             self._set_prompt(_("Could not save: {error}").format(error=error))
