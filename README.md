@@ -139,6 +139,7 @@ Passing `-s/--source` runs headless (no window).
 - [docs/calibration.md](docs/calibration.md) — profiles, pose proxies, multi-pose references, expression-proof crop, eye and mouth reveal
 - [docs/tracking.md](docs/tracking.md) — the tracker, support points, hold through missed detections, instant toggles
 - [docs/reprojection.md](docs/reprojection.md) — the display-side tracker and why it never trusts a half-applied correction
+- [docs/performance.md](docs/performance.md) — where a frame goes, why the models are launch-bound, what was tried
 
 <details>
 <summary>Project layout</summary>
@@ -300,6 +301,7 @@ python run.py [-s SOURCE] [-t TARGET] [-o OUTPUT]
 - [docs/calibration.md](docs/calibration.md) — профили, прокси позы, многопозные опоры, кроп под мимику, глаза и рот
 - [docs/tracking.md](docs/tracking.md) — трекер, опорные точки, удержание при потере детекции, мгновенные переключатели
 - [docs/reprojection.md](docs/reprojection.md) — дисплейный трекер и почему он не верит полуприменённой поправке
+- [docs/performance.md](docs/performance.md) — куда уходит кадр, почему модели упираются в запуск ядер, что пробовали
 
 <details>
 <summary>Структура проекта</summary>
