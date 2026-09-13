@@ -719,6 +719,12 @@ class MainWindow(QMainWindow):
         footer.mousePressEvent = lambda _e: webbrowser.open("https://deeplivecam.net")
         layout.addWidget(footer)
 
+        from modules.providers import install_hint
+
+        hint = install_hint()
+        if hint:
+            QTimer.singleShot(0, lambda: update_status(hint))
+
     # ── responsive previews ──────────────────────────────────────────────
 
     # Two previews, the swap button and the margins must fit the window

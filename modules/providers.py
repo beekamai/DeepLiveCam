@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import glob
 import os
+import subprocess
 import sys
 from typing import Any, List, Optional
 
@@ -28,6 +29,9 @@ ENGINE_CACHE = os.path.join(os.path.dirname(modules.globals.ROOT_DIR), "models",
 WORKSPACE_BYTES = 2 << 30
 
 _available: Optional[bool] = None
+_supported: Optional[bool] = None
+# TensorRT 10 builds engines for Turing (compute capability 7.5) and newer.
+MIN_COMPUTE_CAP = 7.5
 
 
 def _runtime_dirs() -> List[str]:
@@ -59,6 +63,33 @@ def tensorrt_available() -> bool:
                     pass
         _available = bool(has_provider and (dirs or sys.platform != "win32"))
     return _available
+
+
+def gpu_supports_tensorrt() -> bool:
+    """The first NVIDIA GPU is new enough for TensorRT 10 (per nvidia-smi)."""
+    global _supported
+    if _supported is None:
+        try:
+            out = subprocess.run(
+                ["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"],
+                capture_output=True, text=True, timeout=5,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            ).stdout
+            _supported = float(out.strip().splitlines()[0]) >= MIN_COMPUTE_CAP
+        except Exception:
+            _supported = False
+    return _supported
+
+
+def install_hint() -> Optional[str]:
+    """A status line suggesting TensorRT when the GPU could use it but the runtime is absent."""
+    cuda = any(
+        p == "CUDAExecutionProvider" or (isinstance(p, tuple) and p[0] == "CUDAExecutionProvider")
+        for p in modules.globals.execution_providers
+    )
+    if cuda and not tensorrt_available() and gpu_supports_tensorrt():
+        return "Your GPU supports TensorRT (~1.5x fps) — run install-tensorrt.bat"
+    return None
 
 
 def tensorrt_wanted() -> bool:

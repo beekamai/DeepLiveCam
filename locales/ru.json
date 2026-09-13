@@ -161,5 +161,6 @@
     "CUDA graph": "CUDA-граф",
     "TensorRT compiles each model into one engine — 2-3x faster; the first use of a model builds it (up to a minute)": "TensorRT компилирует каждую модель в один движок — в 2-3 раза быстрее; при первом использовании модели он собирается (до минуты)",
     "TensorRT runtime not installed — run install-tensorrt.bat": "Рантайм TensorRT не установлен — запустите install-tensorrt.bat",
-    "Backend: {backend}. Models reload on next use; restart Live to apply.": "Бэкенд: {backend}. Модели перезагрузятся при следующем использовании; перезапустите Live."
+    "Backend: {backend}. Models reload on next use; restart Live to apply.": "Бэкенд: {backend}. Модели перезагрузятся при следующем использовании; перезапустите Live.",
+    "Your GPU supports TensorRT (~1.5x fps) — run install-tensorrt.bat": "Ваша видеокарта поддерживает TensorRT (~1,5x fps) — запустите install-tensorrt.bat"
 }
