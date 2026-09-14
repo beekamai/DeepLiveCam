@@ -24,6 +24,8 @@ A fork of [Deep-Live-Cam](https://github.com/hacksider/Deep-Live-Cam) built arou
 ### Features
 
 - 🧊 **3D head pose every frame** — 68 landmarks fitted in 3D give the real yaw / pitch / roll: the swap fades past the angles you set with no calibration, and the 3D silhouette keeps the far cheek in the mask on turns (`docs/head-geometry.md`)
+- 📺 **Virtual camera** — one switch sends the swapped picture to the OBS Virtual Camera device, so Discord, Zoom or a browser use it as a webcam; **Face fader** eases the swap in or out over a chosen number of seconds
+- 🗂️ **Library & face picker** — save named source sets (several photos each) and reload them in a click; a photo with several people opens a picker for the right face
 - 🖼️ **Several photos of one person** as the source — front, turned, up, down: their embeddings are blended by the target's pose, so the identity stays steady and turned faces get the photo taken at that angle (`docs/source-identity.md`)
 - ⚡ **CUDA-graph inference** for the detector, landmarks, swappers and enhancers; the XSeg occluder rebuilt for the GPU (8× faster than the stock graph)
 - 🎯 **Optical-flow tracking** between detections: forty support points over the whole head, forward-backward check, RANSAC — a hand or a mic does not bend the alignment; the face is carried for a second after the detector loses it (deep turn) and fades out instead of cutting
@@ -38,8 +40,8 @@ A fork of [Deep-Live-Cam](https://github.com/hacksider/Deep-Live-Cam) built arou
 ### What it looks like
 
 <p align="center">
-  <img src="media/ui_live.png" alt="Live mode and the Motion tab" width="420">
-  <img src="media/ui_media.png" alt="Photo / Video mode and the Mask tab" width="420">
+  <img src="media/ui_live.png" alt="Live mode" width="420">
+  <img src="media/ui_media.png" alt="Photo / Video mode" width="420">
 </p>
 
 <p align="center">
@@ -104,18 +106,20 @@ python run.py --execution-provider cuda        # coreml on Apple Silicon, cpu wi
 
 ### Using it
 
-**Live**: pick a source face (select several photos of the same person at once to blend them by pose) → choose the camera → **Live**. Stream the preview window with OBS (Window Capture) or point a virtual camera at it.
+**Live**: pick a source face (select several photos of the same person at once to blend them by pose; a photo with several people asks which one) → choose the camera and resolution → **Live**. The camera view appears inside the window. Switch on **Virtual camera** to feed Discord, Zoom or a browser directly (needs OBS Studio for its virtual camera driver), or capture the window with OBS. **Face fader** eases the swap in or out over the chosen seconds. The ★ button saves the current photos to the **Library** under a name; the combo next to it reloads a set.
 
 **Calibrate…** (Live tab or Motion → Calibration): press **Start**, hold each pose when asked — straight, then the furthest left / right / up / down at which the swap should *still* hold — and save. Tones mark the countdown, each capture and the end, and *Voice prompts* (English, system voice) say which way to turn, so you need not watch the screen. The profile lives in `calibration/` and is remembered.
 
 **Photo / Video**: pick a source face and a target image or video → **Preview** to check a frame → **Start** to render. Output goes next to the target.
 
-Settings tabs:
+The left column holds the mode (Live | Photo / Video) with its controls, then the settings sections:
 
-| Tab | What lives there |
+| Section | What lives there |
 |---|---|
-| Models | swapper, enhancer, enhancer crop, transparency, sharpness, backend (TensorRT / CUDA graph) |
-| Mask | face outline mask, occlusion mask (XSeg) and its interval, Poisson blend, mask overlay, mouth mask (region or lips-only, the latter keeps a moustache swapped), real blinks, real eyes |
+| Live | camera, resolution (360p–1440p), Live, Calibrate…, Virtual camera, Face fader |
+| Photo / Video | Start, Preview, keep fps / audio / frames, many faces, map faces |
+| Models | swapper, enhancer, enhancer crop, transparency, sharpness, backend (TensorRT / CUDA graph), GPU |
+| Mask | face outline mask, occlusion mask (XSeg) and its interval, Poisson blend, mask overlay, mouth mask (region or lips-only, the latter keeps a moustache swapped), real blinks, real eyes, forehead and chin reach |
 | Motion | face tracking, low-latency reprojection, 3D head pose (angle limits, 3D outline), calibration profiles and their switches |
 | Output | webcam colour fix, FPS counter, mirror, **Max FPS** (cap the swap rate to spare the GPU; the preview still shows every camera frame), language, Destroy |
 
@@ -191,6 +195,8 @@ AGPL-3.0, as upstream. Models keep their own licences.
 ### Возможности
 
 - 🧊 **3D-поза головы в каждом кадре** — 68 точек, подогнанных в 3D, дают реальные углы поворота, наклона и крена: подмена гаснет за заданными градусами без калибровки, а 3D-силуэт держит дальнюю щёку в маске на поворотах (`docs/head-geometry.md`)
+- 📺 **Виртуальная камера** — один переключатель отдаёт подменённую картинку в устройство OBS Virtual Camera, и Discord, Zoom или браузер берут её как веб-камеру; **Плавная подмена** включает или убирает подмену за заданное число секунд
+- 🗂️ **Библиотека и выбор лица** — именованные наборы фото источника сохраняются и загружаются одним кликом; на фото с несколькими людьми открывается выбор нужного лица
 - 🖼️ **Несколько фото одного человека** как источник — анфас, в повороте, сверху, снизу: их эмбеддинги смешиваются по позе цели, идентичность держится ровнее, а повёрнутое лицо получает фото под этим углом (`docs/source-identity.md`)
 - ⚡ **CUDA-графы** для детектора, точек, свапперов и улучшателей; окклюдер XSeg пересобран под GPU (в 8 раз быстрее исходного графа)
 - 🎯 **Трекинг оптическим потоком** между детекциями: сорок опорных точек по всей голове, прямая-обратная проверка, RANSAC — рука или микрофон не искривляют выравнивание; после потери детекции (сильный поворот) лицо ведётся ещё секунду и гаснет, а не обрывается
@@ -205,8 +211,8 @@ AGPL-3.0, as upstream. Models keep their own licences.
 ### Как это выглядит
 
 <p align="center">
-  <img src="media/ui_live.png" alt="Режим Live и вкладка Движение" width="420">
-  <img src="media/ui_media.png" alt="Режим Фото / Видео и вкладка Маска" width="420">
+  <img src="media/ui_live.png" alt="Режим Live" width="420">
+  <img src="media/ui_media.png" alt="Режим Фото / Видео" width="420">
 </p>
 
 <p align="center">
@@ -271,18 +277,20 @@ python run.py --execution-provider cuda        # coreml на Apple Silicon, cpu 
 
 ### Как пользоваться
 
-**Live**: выберите исходное лицо (можно сразу несколько фото одного человека, они смешаются по позе) → камеру → **Live**. Окно превью захватывайте в OBS (Window Capture) или подавайте в виртуальную камеру.
+**Live**: выберите исходное лицо (можно сразу несколько фото одного человека, они смешаются по позе; на фото с несколькими людьми программа спросит, кого брать) → камеру и разрешение → **Live**. Картинка с камеры появляется внутри окна. Включите **Виртуальную камеру**, чтобы отдавать её напрямую в Discord, Zoom или браузер (нужен OBS Studio ради его драйвера виртуальной камеры), или захватывайте окно в OBS. **Плавная подмена** включает или убирает подмену за заданные секунды. Кнопка ★ сохраняет текущие фото в **Библиотеку** под именем; комбо рядом загружает набор.
 
 **Калибровка…** (вкладка Live или Движение → Калибровка): нажмите **Старт**, держите каждую позу по запросу — прямо, затем максимально влево / вправо / вверх / вниз, где подмена ещё *должна* держаться, — и сохраните. Отсчёт, каждый захват и финал отмечаются сигналами, а *Голосовые подсказки* (английский, системный голос) говорят, куда поворачивать, — на экран смотреть не обязательно. Профиль лежит в `calibration/` и запоминается.
 
 **Фото / Видео**: исходное лицо и целевое изображение или видео → **Предпросмотр** для проверки кадра → **Старт** для рендера. Результат кладётся рядом с целью.
 
-Вкладки настроек:
+В левой колонке — режим (Live | Фото / Видео) с его кнопками, ниже секции настроек:
 
-| Вкладка | Что там |
+| Секция | Что там |
 |---|---|
-| Модели | сваппер, улучшатель, кроп улучшателя, прозрачность, резкость, бэкенд (TensorRT / CUDA-граф) |
-| Маска | маска по контуру, маска перекрытий (XSeg) и её интервал, Poisson-смешивание, показ маски, маска рта (область или только губы — второй режим не раскрывает усы), настоящие моргания, свои глаза |
+| Live | камера, разрешение (360p–1440p), Live, Калибровка…, виртуальная камера, плавная подмена |
+| Фото / Видео | Старт, Предпросмотр, сохранить fps / звук / кадры, много лиц, сопоставление лиц |
+| Модели | сваппер, улучшатель, кроп улучшателя, прозрачность, резкость, бэкенд (TensorRT / CUDA-граф), GPU |
+| Маска | маска по контуру, маска перекрытий (XSeg) и её интервал, Poisson-смешивание, показ маски, маска рта (область или только губы — второй режим не раскрывает усы), настоящие моргания, свои глаза, запас на лоб и подбородок |
 | Движение | трекинг лица, репроекция, 3D-поза головы (пороги углов, 3D-контур), профили калибровки и их переключатели |
 | Вывод | цветокоррекция веб-камеры, счётчик FPS, зеркало, **Макс. FPS** (потолок частоты подмены, чтобы разгрузить GPU; превью по-прежнему показывает каждый кадр камеры), язык, Закрыть |
 

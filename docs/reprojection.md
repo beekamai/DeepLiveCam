@@ -60,6 +60,28 @@ proportion to how far it moved (`EDGE_SOFTEN` × shift, capped at 12 px):
 the further from where it was rendered, the less its border matches the
 frame underneath, and the more it needs to fade into it.
 
+## Why not frame interpolation (RIFE)
+
+Deep-Live-Cam 2.7 smooths its output with RIFE, a learned interpolator
+that synthesises frames *between* two finished swaps.  That trades latency
+for smoothness: the in-between frame can only be made once the later swap
+exists, so everything shown is at least one swap interval old, and at a
+low swap rate the face visibly trails the person.  Reprojection makes the
+opposite trade: it shows the *current* camera frame with the last swap
+moved to where the face is now, so position never lags — what lags is the
+expression inside the region (the mouth still shows the last swap's
+shape).  At a low swap rate that is what "the mask falls behind" looks
+like; RIFE would add delay on top, not remove it.
+
+The lever that would fix the expression lag is a non-rigid reprojection:
+warp the last swapped face by the movement of the landmarks (a
+piecewise-affine mesh from the swap-time landmarks to the current ones)
+instead of a similarity transform, so the lips and eyes of the old swap
+follow the real ones between swaps.  Landmarks cost 1.6 ms on the display
+side and the warp a few more; it is the planned next step for low-fps
+setups, alongside the real-mouth / real-eyes reveals that already hide
+most of the lag when switched on.
+
 ## What it does not do
 
 * The expression inside the region is still as old as the processing
