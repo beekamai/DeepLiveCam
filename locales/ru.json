@@ -239,5 +239,6 @@
     "not downloaded": "не скачано",
     "Ready": "Готово",
     "Could not download {name} — see the console.": "Не удалось скачать {name} — см. консоль.",
-    "The camera gives a black picture — reopening it. If this device is a virtual camera (OBS, Camo), pick your real webcam instead.": "Камера отдаёт чёрную картинку — переоткрываю её. Если это виртуальная камера (OBS, Camo), выберите настоящую веб-камеру."
+    "The camera gives a black picture — reopening it. If this device is a virtual camera (OBS, Camo), pick your real webcam instead.": "Камера отдаёт чёрную картинку — переоткрываю её. Если это виртуальная камера (OBS, Camo), выберите настоящую веб-камеру.",
+    "Could not download": "Не удалось скачать"
 }
