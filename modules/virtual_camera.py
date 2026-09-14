@@ -18,7 +18,8 @@ import numpy as np
 import modules.globals
 
 NAME = "DLC.VIRTUAL-CAMERA"
-_LOCK = threading.Lock()
+# Re-entrant: a failure inside send() closes the device through stop().
+_LOCK = threading.RLock()
 _camera = None
 _size: Optional[tuple] = None
 _failed = False
