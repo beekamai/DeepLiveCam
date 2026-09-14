@@ -218,5 +218,6 @@
     "Stop fade": "Остановить",
     "Virtual camera": "Виртуальная камера",
     "Send the live output to the OBS Virtual Camera device, so Discord, Zoom or a browser can pick it as a webcam (needs OBS Studio installed)": "Отдавать живой вывод в устройство OBS Virtual Camera, чтобы Discord, Zoom или браузер видели его как веб-камеру (нужен установленный OBS Studio)",
-    "pyvirtualcam is not installed": "pyvirtualcam не установлен"
+    "pyvirtualcam is not installed": "pyvirtualcam не установлен",
+    "Press Live to see the camera here, or pick a target and press Preview.": "Нажмите Live, чтобы увидеть здесь камеру, или выберите цель и нажмите Предпросмотр."
 }

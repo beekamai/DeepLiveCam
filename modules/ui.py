@@ -35,6 +35,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
+    QStackedWidget,
     QSpinBox,
     QInputDialog,
     QProgressBar,
@@ -97,11 +98,11 @@ import json
 
 # ─── constants ────────────────────────────────────────────────────────────
 
-ROOT_HEIGHT = 820
-ROOT_WIDTH = 640
+ROOT_HEIGHT = 780
+ROOT_WIDTH = 1180
 # The window scrolls below this; it never refuses to fit a small screen.
-ROOT_MIN_WIDTH = 460
-ROOT_MIN_HEIGHT = 480
+ROOT_MIN_WIDTH = 900
+ROOT_MIN_HEIGHT = 600
 
 PREVIEW_MAX_HEIGHT = 700
 PREVIEW_MAX_WIDTH = 1200
@@ -124,7 +125,9 @@ POPUP_LIVE_SCROLL_WIDTH = 870
 POPUP_LIVE_SCROLL_HEIGHT = 700
 
 MAPPER_PREVIEW_SIZE = 100
-SOURCE_TARGET_PREVIEW_SIZE = 200
+SOURCE_TARGET_PREVIEW_SIZE = 160
+# Settings column on the left of the window.
+LEFT_PANEL_WIDTH = 430
 
 
 # ─── modern dark stylesheet ───────────────────────────────────────────────
@@ -210,6 +213,11 @@ QSlider::sub-page:horizontal {
     border-radius: 3px;
 }
 
+QStackedWidget#stage {
+    background-color: #141414;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+}
 QLabel#imageDrop {
     background-color: #2a2a2a;
     border: 2px dashed #444;
@@ -738,48 +746,88 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(ROOT_MIN_WIDTH, ROOT_MIN_HEIGHT)
         self.resize(width, height)
 
-        # Everything sits in a scroll area, so a short screen still reaches
-        # every control instead of clipping the bottom of the window.
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll.viewport().setAutoFillBackground(False)
-        root = QWidget()
-        root.setAutoFillBackground(False)
-        scroll.setWidget(root)
-        self.setCentralWidget(scroll)
-        layout = QVBoxLayout(root)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        central = QWidget()
+        self.setCentralWidget(central)
+        outer = QHBoxLayout(central)
+        outer.setContentsMargins(12, 12, 12, 12)
+        outer.setSpacing(12)
 
-        top = QHBoxLayout()
-        top.setSpacing(16)
-        top.addLayout(self._build_source_column())
+        # Left column: the mode (Live | Photo / Video) with its controls on
+        # top, every settings section stacked below it, all scrollable so a
+        # short screen still reaches the last slider.
+        panel = QWidget()
+        panel.setAutoFillBackground(False)
+        panel_layout = QVBoxLayout(panel)
+        panel_layout.setContentsMargins(0, 0, 8, 0)
+        panel_layout.setSpacing(10)
         self._modes = QTabWidget()
         self._modes.addTab(self._build_live_page(), _("Live"))
         self._modes.addTab(self._build_media_page(), _("Photo / Video"))
         self._modes.setToolTip(_("Live swaps your webcam; Photo / Video processes a file"))
-        # Takes whatever width is left of the source column, never more —
-        # and only as much height as the *current* page needs, so the short
-        # Live page does not inherit the Photo / Video page's height.
-        self._modes.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self._modes.currentChanged.connect(self._fit_mode_tabs)
+        self._modes.currentChanged.connect(self._on_mode_changed)
         self._fit_mode_tabs(self._modes.currentIndex())
-        top.addWidget(self._modes, 1)
-        layout.addLayout(top)
+        panel_layout.addWidget(self._modes)
+        self._sections: List[QGroupBox] = []
+        for title, page in (
+            (_("Models"), self._build_models_tab()),
+            (_("Mask"), self._build_mask_tab()),
+            (_("Motion"), self._build_motion_tab()),
+            (_("Output"), self._build_output_tab()),
+        ):
+            box = QGroupBox(title)
+            box_layout = QVBoxLayout(box)
+            box_layout.setContentsMargins(0, 4, 0, 0)
+            box_layout.addWidget(page)
+            panel_layout.addWidget(box)
+            self._sections.append(box)
+        panel_layout.addStretch(1)
+        # Long combo texts (a GPU name, a model label) must not widen the
+        # column past the viewport: they elide instead.
+        for combo in panel.findChildren(QComboBox):
+            combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+            combo.setMinimumContentsLength(8)
+        for label in panel.findChildren(QLabel):
+            if label.wordWrap():
+                label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(panel)
+        scroll.setFixedWidth(LEFT_PANEL_WIDTH)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.viewport().setAutoFillBackground(False)
+        outer.addWidget(scroll)
 
-        self._tabs = QTabWidget()
-        self._tabs.addTab(self._build_models_tab(), _("Models"))
-        self._tabs.addTab(self._build_mask_tab(), _("Mask"))
-        self._tabs.addTab(self._build_motion_tab(), _("Motion"))
-        self._tabs.addTab(self._build_output_tab(), _("Output"))
-        layout.addWidget(self._tabs, 1)
+        # Right column: source and target thumbnails, then the stage where
+        # the live camera or the file preview is shown inside the window.
+        right = QVBoxLayout()
+        right.setSpacing(10)
+        top = QHBoxLayout()
+        top.setSpacing(16)
+        top.addLayout(self._build_source_column())
+        self._target_column = QWidget()
+        self._target_column.setLayout(self._build_target_column())
+        top.addWidget(self._target_column)
+        top.addStretch(1)
+        right.addLayout(top)
+
+        self._live: Optional[QWidget] = None
+        self._stage = QStackedWidget()
+        self._stage.setObjectName("stage")
+        self._stage.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._placeholder = QLabel(_("Press Live to see the camera here, or pick a target and press Preview."))
+        self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._placeholder.setWordWrap(True)
+        self._placeholder.setObjectName("statusLabel")
+        self._stage.addWidget(self._placeholder)
+        right.addWidget(self._stage, 1)
 
         self._status_label = QLabel("")
         self._status_label.setObjectName("statusLabel")
         self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._status_label.setWordWrap(True)
-        layout.addWidget(self._status_label)
+        right.addWidget(self._status_label)
         # Indeterminate bar shown while a model loads or a TensorRT engine
         # builds — the window stays responsive, and this says why it waits.
         self._busy_bar = QProgressBar()
@@ -788,7 +836,7 @@ class MainWindow(QMainWindow):
         self._busy_bar.setFixedHeight(6)
         self._busy_bar.hide()
         self._busy_depth = 0
-        layout.addWidget(self._busy_bar)
+        right.addWidget(self._busy_bar)
 
         footer = QLabel(f"DeepLiveCam {modules.metadata.version} · GitHub")
         footer.setObjectName("linkLabel")
@@ -796,7 +844,9 @@ class MainWindow(QMainWindow):
         footer.setCursor(Qt.CursorShape.PointingHandCursor)
         footer.setToolTip(REPO_URL)
         footer.mousePressEvent = lambda _e: webbrowser.open(REPO_URL)
-        layout.addWidget(footer)
+        right.addWidget(footer)
+        outer.addLayout(right, 1)
+        self._on_mode_changed(self._modes.currentIndex())
 
         from modules.providers import install_hint
 
@@ -804,24 +854,33 @@ class MainWindow(QMainWindow):
         if hint:
             QTimer.singleShot(0, lambda: update_status(hint))
 
-    # ── responsive previews ──────────────────────────────────────────────
+    # ── stage (embedded live camera / file preview) ────────────────────
 
-    # Two previews, the swap button and the margins must fit the window
-    # width; below that the previews shrink instead of the window clipping.
-    PREVIEW_MIN = 120
-    # source preview, the mode tab's margins, the target preview and its
-    # buttons column must share the window width
-    PREVIEW_CHROME = 16 * 2 + 16 + 16 * 2 + 24
+    def _on_mode_changed(self, index: int) -> None:
+        """The target thumbnail belongs to Photo / Video only."""
+        self._target_column.setVisible(index == 1)
 
-    def resizeEvent(self, event) -> None:
-        super().resizeEvent(event)
-        fit = (self.width() - self.PREVIEW_CHROME) // 2
-        size = max(self.PREVIEW_MIN, min(int(SOURCE_TARGET_PREVIEW_SIZE * _ui_scale()), fit))
-        if size != self._preview_size[0]:
-            self._preview_size = (size, size)
-            self.source_label.setFixedSize(size, size)
-            self.target_label.setFixedSize(size, size)
-            self._refresh_previews()
+    def attach_live(self, widget: QWidget) -> None:
+        self._live = widget
+        self._stage_show(widget)
+
+    def detach_live(self, widget: QWidget) -> None:
+        if self._live is widget:
+            self._live = None
+        if self._stage.indexOf(widget) >= 0:
+            self._stage.removeWidget(widget)
+        widget.setParent(None)
+        widget.deleteLater()
+        self._stage.setCurrentWidget(self._placeholder)
+
+    def _stage_show(self, widget: QWidget) -> None:
+        if self._stage.indexOf(widget) < 0:
+            self._stage.addWidget(widget)
+        self._stage.setCurrentWidget(widget)
+
+    def _stage_hide(self, widget: QWidget) -> None:
+        if self._stage.currentWidget() is widget:
+            self._stage.setCurrentWidget(self._live if self._live is not None else self._placeholder)
 
     def _refresh_previews(self) -> None:
         """Re-render the source/target thumbnails at the current size."""
@@ -1098,16 +1157,12 @@ class MainWindow(QMainWindow):
             self.btn_fader.setText(_("Face fader"))
             self._on_transparency_change(self._fader_target)
 
-    # ── photo / video page: target, Start, Preview, output options ───────
+    # ── target column (Photo / Video) ────────────────────────────────────
 
-    def _build_media_page(self) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(16, 14, 16, 14)
-        layout.setSpacing(8)
-
+    def _build_target_column(self) -> QVBoxLayout:
+        col = QVBoxLayout()
         self.target_label = _make_image_drop(_("Target"), self._preview_size)
-        layout.addWidget(self.target_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        col.addWidget(self.target_label, alignment=Qt.AlignmentFlag.AlignCenter)
         tgt_row = QHBoxLayout()
         self.btn_select_target = QPushButton(_("Select a target"))
         self.btn_select_target.setToolTip(
@@ -1121,7 +1176,17 @@ class MainWindow(QMainWindow):
         self.btn_swap.clicked.connect(self._on_swap_paths)
         tgt_row.addWidget(self.btn_select_target, 1)
         tgt_row.addWidget(self.btn_swap)
-        layout.addLayout(tgt_row)
+        col.addLayout(tgt_row)
+        col.addStretch(1)
+        return col
+
+    # ── photo / video page: Start, Preview, output options ───────────────
+
+    def _build_media_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setSpacing(8)
 
         actions = QHBoxLayout()
         self.btn_start = QPushButton(_("Start"))
@@ -1990,6 +2055,16 @@ class PreviewWindow(QWidget):
         self._slider.valueChanged.connect(self.refresh_frame)
         layout.addWidget(self._slider)
 
+    def show(self) -> None:
+        super().show()
+        if _MAIN is not None:
+            _MAIN._stage_show(self)
+
+    def hide(self) -> None:
+        super().hide()
+        if _MAIN is not None:
+            _MAIN._stage_hide(self)
+
     def init_for_target(self) -> None:
         if is_image(modules.globals.target_path):
             self._slider.hide()
@@ -2464,6 +2539,8 @@ class WebcamPreviewWindow(QWidget):
         global _WEBCAM_PREVIEW
         if _WEBCAM_PREVIEW is self:
             _WEBCAM_PREVIEW = None
+        if _MAIN is not None:
+            _MAIN.detach_live(self)
         event.accept()
 
 
@@ -2472,7 +2549,10 @@ def _open_webcam_preview(camera_index: int) -> None:
     if _WEBCAM_PREVIEW is not None:
         _WEBCAM_PREVIEW.close()
     _WEBCAM_PREVIEW = WebcamPreviewWindow(camera_index)
-    _WEBCAM_PREVIEW.show()
+    if _MAIN is not None:
+        _MAIN.attach_live(_WEBCAM_PREVIEW)
+    else:
+        _WEBCAM_PREVIEW.show()
 
 
 # ─── mapper dialogs (image/video + live) ────────────────────────────────
@@ -2731,10 +2811,16 @@ def _rebuild_main_window() -> None:
     old = _MAIN
     if old is None:
         return
+    if _WEBCAM_PREVIEW is not None and _WEBCAM_PREVIEW.isVisible():
+        # The live view is a child of the window being replaced.
+        _WEBCAM_PREVIEW.close()
     fresh = MainWindow(old._start_cb, old._destroy_cb)
     fresh.setGeometry(old.geometry())
-    fresh._tabs.setCurrentIndex(old._tabs.currentIndex())
     fresh._modes.setCurrentIndex(old._modes.currentIndex())
+    if _PREVIEW is not None:
+        _PREVIEW.hide()
+        _PREVIEW.setParent(None)
+        fresh._stage.addWidget(_PREVIEW)
     if _BRIDGE is not None:
         try:
             _BRIDGE.statusChanged.disconnect(old.set_status)
@@ -2784,6 +2870,7 @@ def init(
     _BRIDGE = _UIBridge()
     _MAIN = MainWindow(start, destroy)
     _PREVIEW = PreviewWindow()
+    _MAIN._stage.addWidget(_PREVIEW)
 
     # Route status updates onto the UI thread regardless of caller.
     _BRIDGE.statusChanged.connect(_MAIN.set_status)
