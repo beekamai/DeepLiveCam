@@ -1161,6 +1161,7 @@ class MainWindow(QMainWindow):
 
     def _build_target_column(self) -> QVBoxLayout:
         col = QVBoxLayout()
+        col.setContentsMargins(0, 0, 0, 0)
         self.target_label = _make_image_drop(_("Target"), self._preview_size)
         col.addWidget(self.target_label, alignment=Qt.AlignmentFlag.AlignCenter)
         tgt_row = QHBoxLayout()
@@ -1304,6 +1305,12 @@ class MainWindow(QMainWindow):
         self.cb_gpu.currentIndexChanged.connect(self._on_gpu_change)
         grid.addWidget(self.cb_gpu, 6, 1)
 
+        self.btn_models = QPushButton(_("Models…"))
+        self.btn_models.setObjectName("secondary")
+        self.btn_models.setToolTip(_("See which models are downloaded and fetch the rest ahead of time"))
+        self.btn_models.clicked.connect(self._on_models_dialog)
+        grid.addWidget(self.btn_models, 7, 0, 1, 2)
+
         grid.addWidget(QLabel(_("Transparency")), 3, 0)
         self.s_transparency = self._slider(0.0, 1.0, 1.0, 100, self._on_transparency_change)
         self.s_transparency.setToolTip(
@@ -1316,8 +1323,15 @@ class MainWindow(QMainWindow):
         self.s_sharpness.setToolTip(_("Sharpen the enhanced face output"))
         grid.addWidget(self.s_sharpness, 4, 1)
 
-        grid.setRowStretch(7, 1)
+        grid.setRowStretch(8, 1)
         return page
+
+    def _on_models_dialog(self) -> None:
+        from modules.ui_model_library import ModelLibraryDialog
+
+        dialog = ModelLibraryDialog(self)
+        dialog.show()
+        self._models_dialog = dialog
 
     def _on_gpu_change(self, index: int) -> None:
         if index < 0 or index == modules.globals.gpu_device:

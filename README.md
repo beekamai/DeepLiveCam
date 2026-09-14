@@ -13,6 +13,16 @@
   <img src="media/demo.gif" alt="Live face swap demo" width="800">
 </p>
 
+<p align="center">
+  <img src="media/ui_live.png" alt="Live mode" width="420">
+  <img src="media/ui_media.png" alt="Photo / Video mode" width="420">
+</p>
+
+<p align="center">
+  <img src="media/ludwig.gif" alt="Mouth mask keeps the real mouth" width="400">
+  <img src="media/streamers.gif" alt="Face mapping onto several people" width="400">
+</p>
+
 ---
 
 ## English
@@ -36,19 +46,6 @@ A fork of [Deep-Live-Cam](https://github.com/hacksider/Deep-Live-Cam) built arou
 - 🎛 **Instant toggles** — mirror, masks and models re-detect on the next frame instead of dropping the swap for a moment
 - 🧩 Swappers: Inswapper-128, HyperSwap 1a / 1b / 1c (256 px). Enhancers: GPEN-256 / 512 / 1024, GFPGAN 1.4, CodeFormer, RestoreFormer++
 - 🖥 Responsive PySide6 UI with Live and Photo / Video modes, English and Russian (switchable at runtime)
-
-### What it looks like
-
-<p align="center">
-  <img src="media/ui_live.png" alt="Live mode" width="420">
-  <img src="media/ui_media.png" alt="Photo / Video mode" width="420">
-</p>
-
-<p align="center">
-  <img src="media/ludwig.gif" alt="Mouth mask keeps the real mouth" width="400">
-  <img src="media/streamers.gif" alt="Face mapping onto several people" width="400">
-  <br><sub>Mouth mask and face mapping — demos from upstream Deep-Live-Cam, both still here.</sub>
-</p>
 
 ### Requirements
 
@@ -118,7 +115,7 @@ The left column holds the mode (Live | Photo / Video) with its controls, then th
 |---|---|
 | Live | camera, resolution (360p–1440p), Live, Calibrate…, Virtual camera, Face fader |
 | Photo / Video | Start, Preview, keep fps / audio / frames, many faces, map faces |
-| Models | swapper, enhancer, enhancer crop, transparency, sharpness, backend (TensorRT / CUDA graph), GPU |
+| Models | swapper, enhancer, enhancer crop, transparency, sharpness, backend (TensorRT / CUDA graph), GPU, **Models…** (what is downloaded, fetch the rest ahead of time) |
 | Mask | face outline mask, occlusion mask (XSeg) and its interval, Poisson blend, mask overlay, mouth mask (region or lips-only, the latter keeps a moustache swapped), real blinks, real eyes, forehead and chin reach |
 | Motion | face tracking, low-latency reprojection, 3D head pose (angle limits, 3D outline), calibration profiles and their switches |
 | Output | webcam colour fix, FPS counter, mirror, **Max FPS** (cap the swap rate to spare the GPU; the preview still shows every camera frame), language, Destroy |
@@ -180,10 +177,6 @@ Built on [Deep-Live-Cam](https://github.com/hacksider/Deep-Live-Cam) by hackside
 
 AGPL-3.0, as upstream. Models keep their own licences.
 
-### Star history
-
-[![Star History Chart](https://api.star-history.com/svg?repos=beekamai/DeepLiveCam&type=Date)](https://star-history.com/#beekamai/DeepLiveCam&Date)
-
 ---
 
 ## Русский
@@ -207,19 +200,6 @@ AGPL-3.0, as upstream. Models keep their own licences.
 - 🎛 **Мгновенные переключатели** — зеркало, маски и модели передетектируют на следующем кадре, без провала в оригинал
 - 🧩 Свапперы: Inswapper-128, HyperSwap 1a / 1b / 1c (256 px). Улучшатели: GPEN-256 / 512 / 1024, GFPGAN 1.4, CodeFormer, RestoreFormer++
 - 🖥 Адаптивный интерфейс на PySide6 с режимами Live и Фото / Видео, английский и русский (переключается на лету)
-
-### Как это выглядит
-
-<p align="center">
-  <img src="media/ui_live.png" alt="Режим Live" width="420">
-  <img src="media/ui_media.png" alt="Режим Фото / Видео" width="420">
-</p>
-
-<p align="center">
-  <img src="media/ludwig.gif" alt="Маска рта оставляет настоящий рот" width="400">
-  <img src="media/streamers.gif" alt="Сопоставление лиц на нескольких людях" width="400">
-  <br><sub>Маска рта и сопоставление лиц — демо из исходного Deep-Live-Cam, обе функции на месте.</sub>
-</p>
 
 ### Требования
 
@@ -289,7 +269,7 @@ python run.py --execution-provider cuda        # coreml на Apple Silicon, cpu 
 |---|---|
 | Live | камера, разрешение (360p–1440p), Live, Калибровка…, виртуальная камера, плавная подмена |
 | Фото / Видео | Старт, Предпросмотр, сохранить fps / звук / кадры, много лиц, сопоставление лиц |
-| Модели | сваппер, улучшатель, кроп улучшателя, прозрачность, резкость, бэкенд (TensorRT / CUDA-граф), GPU |
+| Модели | сваппер, улучшатель, кроп улучшателя, прозрачность, резкость, бэкенд (TensorRT / CUDA-граф), GPU, **Модели…** (что скачано, докачать остальное заранее) |
 | Маска | маска по контуру, маска перекрытий (XSeg) и её интервал, Poisson-смешивание, показ маски, маска рта (область или только губы — второй режим не раскрывает усы), настоящие моргания, свои глаза, запас на лоб и подбородок |
 | Движение | трекинг лица, репроекция, 3D-поза головы (пороги углов, 3D-контур), профили калибровки и их переключатели |
 | Вывод | цветокоррекция веб-камеры, счётчик FPS, зеркало, **Макс. FPS** (потолок частоты подмены, чтобы разгрузить GPU; превью по-прежнему показывает каждый кадр камеры), язык, Закрыть |
@@ -351,6 +331,8 @@ docs/                   заметки по устройству
 
 AGPL-3.0, как у исходного проекта. Модели — под своими лицензиями.
 
-### История звёзд
+---
+
+### ⭐ Star history
 
 [![Star History Chart](https://api.star-history.com/svg?repos=beekamai/DeepLiveCam&type=Date)](https://star-history.com/#beekamai/DeepLiveCam&Date)
