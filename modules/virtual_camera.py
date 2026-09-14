@@ -49,10 +49,22 @@ def send(frame: np.ndarray, fps: float = 30.0) -> None:
             try:
                 import pyvirtualcam
 
-                _camera = pyvirtualcam.Camera(
-                    width=w, height=h, fps=max(1, int(round(fps))),
-                    fmt=pyvirtualcam.PixelFormat.BGR, print_fps=False,
-                )
+                # Unity Capture first: OBS 32's virtual camera driver shows a
+                # black picture for pyvirtualcam frames (seen on 32.2.2), the
+                # Unity Capture driver does not.
+                errors = []
+                for backend in ("unitycapture", "obs"):
+                    try:
+                        _camera = pyvirtualcam.Camera(
+                            width=w, height=h, fps=max(1, int(round(fps))),
+                            fmt=pyvirtualcam.PixelFormat.BGR, print_fps=False,
+                            backend=backend,
+                        )
+                        break
+                    except Exception as error:
+                        errors.append(f"{backend}: {str(error)[:80]}")
+                if _camera is None:
+                    raise RuntimeError("; ".join(errors))
                 _size = (w, h)
                 print(f"{NAME}: streaming {w}x{h} to {_camera.device}")
                 from modules.core import update_status

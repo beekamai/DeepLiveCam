@@ -31,6 +31,8 @@ source_picks: dict = {}
 face_fader_seconds: int = 5
 # Send the live output to a virtual camera device (OBS Virtual Camera).
 virtual_camera: bool = False
+# Camera chosen for Live, by its listed name.
+camera_name: str = ""
 target_path: str | None = None
 output_path: str | None = None
 

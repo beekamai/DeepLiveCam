@@ -35,6 +35,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
+    QSplitter,
     QStackedWidget,
     QSpinBox,
     QInputDialog,
@@ -128,6 +129,7 @@ MAPPER_PREVIEW_SIZE = 100
 SOURCE_TARGET_PREVIEW_SIZE = 160
 # Settings column on the left of the window.
 LEFT_PANEL_WIDTH = 430
+LEFT_PANEL_MIN_WIDTH = 360
 
 
 # ─── modern dark stylesheet ───────────────────────────────────────────────
@@ -502,6 +504,7 @@ def save_switch_states():
         "camera_resolution": modules.globals.camera_resolution,
         "face_fader_seconds": modules.globals.face_fader_seconds,
         "virtual_camera": modules.globals.virtual_camera,
+        "camera_name": modules.globals.camera_name,
         "head_outline": modules.globals.head_outline,
         "head_yaw_limit": modules.globals.head_yaw_limit,
         "head_pitch_limit": modules.globals.head_pitch_limit,
@@ -570,6 +573,7 @@ def load_switch_states():
             modules.globals.camera_resolution = state["camera_resolution"]
         modules.globals.face_fader_seconds = max(1, min(60, int(state.get("face_fader_seconds", 5))))
         modules.globals.virtual_camera = bool(state.get("virtual_camera", False))
+        modules.globals.camera_name = str(state.get("camera_name", "") or "")
         if modules.globals.mouth_reveal_mode not in ("region", "lips"):
             modules.globals.mouth_reveal_mode = "region"
         modules.globals.head_outline = state.get("head_outline", True)
@@ -650,13 +654,40 @@ def check_and_ignore_nsfw(target, destroy: Optional[Callable] = None) -> bool:
 # ─── camera enumeration (unchanged from tk version) ──────────────────────
 
 
+OBS_VIRTUALCAM_CLSID = "{A3FCE0F5-3493-419F-958A-ABA1250EC20B}"
+
+
+def _obs_virtual_camera_name() -> Optional[str]:
+    """The friendly name the OBS Virtual Camera filter is registered under.
+
+    It can be renamed (some setups make it look like a real webcam), so the
+    device list is matched by the filter's CLSID, not by the word OBS.
+    """
+    if platform.system() != "Windows":
+        return None
+    try:
+        import winreg
+
+        with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, f"CLSID\\{OBS_VIRTUALCAM_CLSID}") as key:
+            return str(winreg.QueryValue(key, None)) or None
+    except OSError:
+        return None
+
+
 def get_available_cameras() -> Tuple[List[int], List[str]]:
     if platform.system() == "Windows":
         try:
             graph = FilterGraph()
-            devices = graph.get_input_devices()
+            devices = list(graph.get_input_devices())
             if devices:
-                return list(range(len(devices))), devices
+                # A virtual camera *output* in the list is a trap: opening it
+                # gives a black picture at 1 fps.  Label it and list it last.
+                obs = _obs_virtual_camera_name()
+                indices = list(range(len(devices)))
+                names = [f"{d} — OBS Virtual Camera (output, not a webcam)"
+                         if obs and d == obs else d for d in devices]
+                order = sorted(indices, key=lambda i: names[i] != devices[i])
+                return [indices[i] for i in order], [names[i] for i in order]
             return [], ["No cameras found"]
         except Exception as exc:
             print(f"Error detecting cameras: {exc}")
@@ -698,13 +729,22 @@ class _Switch(QWidget):
         super().__init__()
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        self._checkbox = QCheckBox(text)
+        layout.setSpacing(8)
+        # The text is a wrapping label next to a bare checkbox: a long
+        # (translated) caption then takes two lines instead of being cut.
+        self._checkbox = QCheckBox()
         self._checkbox.setChecked(initial)
         self._checkbox.toggled.connect(self.toggled.emit)
+        self._label = QLabel(text)
+        self._label.setWordWrap(True)
+        self._label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self._label.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._label.mousePressEvent = lambda _e: self._checkbox.toggle()
         if tooltip:
             self._checkbox.setToolTip(tooltip)
+            self._label.setToolTip(tooltip)
         layout.addWidget(self._checkbox)
-        layout.addStretch(1)
+        layout.addWidget(self._label, 1)
 
     def isChecked(self) -> bool:
         return self._checkbox.isChecked()
@@ -793,15 +833,28 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(panel)
-        scroll.setFixedWidth(LEFT_PANEL_WIDTH)
+        scroll.setMinimumWidth(LEFT_PANEL_MIN_WIDTH)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         scroll.viewport().setAutoFillBackground(False)
-        outer.addWidget(scroll)
+
+        # The columns share a splitter: drag the handle to give the settings
+        # more room, and a wider window widens both sides.
+        self._splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._splitter.setChildrenCollapsible(False)
+        self._splitter.addWidget(scroll)
+        right_widget = QWidget()
+        right_widget.setAutoFillBackground(False)
+        self._splitter.addWidget(right_widget)
+        self._splitter.setStretchFactor(0, 1)
+        self._splitter.setStretchFactor(1, 2)
+        self._splitter.setSizes([LEFT_PANEL_WIDTH, max(ROOT_WIDTH - LEFT_PANEL_WIDTH, LEFT_PANEL_WIDTH)])
+        outer.addWidget(self._splitter)
 
         # Right column: source and target thumbnails, then the stage where
         # the live camera or the file preview is shown inside the window.
-        right = QVBoxLayout()
+        right = QVBoxLayout(right_widget)
+        right.setContentsMargins(8, 0, 0, 0)
         right.setSpacing(10)
         top = QHBoxLayout()
         top.setSpacing(16)
@@ -845,7 +898,6 @@ class MainWindow(QMainWindow):
         footer.setToolTip(REPO_URL)
         footer.mousePressEvent = lambda _e: webbrowser.open(REPO_URL)
         right.addWidget(footer)
-        outer.addLayout(right, 1)
         self._on_mode_changed(self._modes.currentIndex())
 
         from modules.providers import install_hint
@@ -1061,7 +1113,10 @@ class MainWindow(QMainWindow):
             cam_ok = False
         else:
             self.cb_camera.addItems(self._camera_names)
+            if modules.globals.camera_name in self._camera_names:
+                self.cb_camera.setCurrentText(modules.globals.camera_name)
             cam_ok = True
+        self.cb_camera.currentTextChanged.connect(self._on_camera_change)
         self.cb_camera.setToolTip(_("Select which camera to use for live mode"))
         cam_row.addWidget(self.cb_camera, 1)
         layout.addLayout(cam_row)
@@ -2003,6 +2058,10 @@ class MainWindow(QMainWindow):
             modules.globals.source_target_map = []
             _open_live_mapper_dialog(camera_index, modules.globals.source_target_map)
 
+    def _on_camera_change(self, name: str) -> None:
+        modules.globals.camera_name = name
+        save_switch_states()
+
     def _on_resolution_change(self, label: str) -> None:
         if label not in RESOLUTIONS or label == modules.globals.camera_resolution:
             return
@@ -2133,6 +2192,11 @@ class PreviewWindow(QWidget):
 
 # Consecutive failed camera reads before Live gives up on the device.
 CAPTURE_MAX_MISSES = 90
+# Start watchdog: a picture darker than this mean for the first WATCH_SECONDS,
+# or fewer than WATCH_MIN_FRAMES in that time, gets the device reopened once.
+DARK_LEVEL = 4.0
+WATCH_SECONDS = 3.0
+WATCH_MIN_FRAMES = 12
 
 
 class _ModelLoader(QThread):
@@ -2172,19 +2236,45 @@ class _CaptureWorker(QThread):
     frame a swap result came from.
     """
 
-    def __init__(self, cap, capture_queue: queue.Queue, stop_event: threading.Event):
+    def __init__(self, cap, capture_queue: queue.Queue, stop_event: threading.Event,
+                 size: Tuple[int, int] = (1280, 720)):
         super().__init__()
         self._cap = cap
         self._queue = capture_queue
         self._stop = stop_event
+        self._size = size
         self.ring: dict = {}
         self.latest_seq = -1
+
+    def _watch_start(self, frame, seq: int, started: float) -> bool:
+        """Black or starved picture in the first seconds: reopen the device
+        once (some cameras need a second open) and tell the user why the
+        window is black.  Returns True when the device was reopened."""
+        self._dark = getattr(self, "_dark", 0) + (1 if float(frame.mean()) < DARK_LEVEL else 0)
+        elapsed = time.perf_counter() - started
+        if elapsed < WATCH_SECONDS or getattr(self, "_reopened", False):
+            return False
+        self._reopened = True
+        if self._dark < seq + 1 and seq + 1 >= WATCH_MIN_FRAMES:
+            return False
+        update_status("The camera gives a black picture — reopening it. If this device "
+                      "is a virtual camera (OBS, Camo), pick your real webcam instead.")
+        try:
+            self._cap.release()
+            time.sleep(0.5)
+            return bool(self._cap.start(self._size[0], self._size[1], 60))
+        except Exception as error:
+            print(f"[webcam] reopen failed: {error}")
+            return False
 
     def run(self) -> None:
         seq = 0
         misses = 0
+        started = time.perf_counter()
         while not self._stop.is_set():
             ret, frame = self._cap.read()
+            if ret and self._watch_start(frame, seq, started):
+                continue
             if not ret:
                 # A failed read is usually a hiccup (USB, another app
                 # probing the device); only a run of them means it is gone.
@@ -2474,7 +2564,7 @@ class WebcamPreviewWindow(QWidget):
         self._stop_event = threading.Event()
 
         self._capture_worker = _CaptureWorker(
-            self._cap, self._capture_queue, self._stop_event
+            self._cap, self._capture_queue, self._stop_event, (width, height),
         )
         self._processing_worker = _ProcessingWorker(
             self._capture_queue, self._processed_queue, self._stop_event, camera_fps

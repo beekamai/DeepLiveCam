@@ -32,6 +32,17 @@ import modules.globals
 LEFT_EYE = (33, 34, 35, 36, 37, 39, 40, 41, 42)
 RIGHT_EYE = (87, 89, 90, 91, 92, 93, 94, 95, 96)
 MOUTH = tuple(range(52, 72))
+# The 106-point mouth in contour order (verified on rendered landmarks):
+# outer lip clockwise from the left corner along the lower lip, back along
+# the upper lip; inner lip the same way.  62 / 60 are the inner centres.
+OUTER_LIP = (52, 55, 56, 53, 59, 58, 61, 68, 67, 71, 63, 64)
+LOWER_OUTER = (55, 56, 53, 59, 58)
+INNER_TOP, INNER_BOTTOM = 62, 60
+# A tongue counts as out when the inner lips part by this share of the
+# mouth width; the reveal then extends below the lower lip by TONGUE_REACH
+# times the gap.
+TONGUE_OPEN = 0.15
+TONGUE_REACH = 1.2
 NOSE = tuple(range(72, 87))
 CHIN = 0
 # An eye counts as shut below this fraction of its open aperture and as open
@@ -144,9 +155,18 @@ def mouth_polygon(face: Any, affine: np.ndarray, strength: float,
     bottom = float(mouth[:, 1].max())
     s = min(max(strength, 0.0), 1.0)
     if mode == "lips":
-        widened = centre + (mouth - centre) * np.array([1.0 + 0.25 * s, 1.0], dtype=np.float32)
-        reach_up = top
-        reach_down = bottom + s * 0.6 * max(chin - bottom, 0.0)
+        # The lips' own contour (not a hull), grown a little with the slider;
+        # when the mouth is open the lower edge drops to cover a tongue.
+        outer = points[list(OUTER_LIP)]
+        width = max(float(outer[:, 0].max() - outer[:, 0].min()), 1.0)
+        outer = centre + (outer - centre) * (1.0 + 0.15 * s)
+        gap = float(np.linalg.norm(points[INNER_BOTTOM] - points[INNER_TOP]))
+        if gap > TONGUE_OPEN * width:
+            drop = np.array([0.0, gap * TONGUE_REACH * (0.5 + 0.5 * s)], dtype=np.float32)
+            lower = {i for i in LOWER_OUTER}
+            outer = np.array([p + drop if idx in lower else p for idx, p in zip(OUTER_LIP, outer)],
+                             dtype=np.float32)
+        return outer.astype(np.float32)
     else:
         widened = centre + (mouth - centre) * np.array([1.0 + 0.6 * s, 1.0], dtype=np.float32)
         reach_up = top - s * 0.9 * max(top - nose_base, 0.0)
@@ -168,7 +188,13 @@ def mouth_reveal_mask(face: Any, affine: np.ndarray, size: int,
     if polygon is None:
         return None
     mask = np.zeros((size, size), dtype=np.uint8)
-    cv2.fillConvexPoly(mask, polygon.astype(np.int32), 255)
+    if mode == "lips":
+        # Lip contour is concave at the corners and under the cupid's bow.
+        cv2.fillPoly(mask, [polygon.astype(np.int32)], 255)
+        grow = max(1, size // 96)
+        mask = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * grow + 1, 2 * grow + 1)))
+    else:
+        cv2.fillConvexPoly(mask, polygon.astype(np.int32), 255)
     # A tight lips mask needs a tight feather, or the blur climbs back over
     # the moustache it was meant to leave alone.
     blur = max(3, (size // (32 if mode == "lips" else 16)) | 1)

@@ -113,6 +113,15 @@ goes; its feather is half as wide so the blur does not climb back over the
 moustache.  The combo next to the slider picks the mode
 (`modules.globals.mouth_reveal_mode`).
 
+The lips polygon is the outer lip *contour* in landmark order
+(`OUTER_LIP`: 52 55 56 53 59 58 61 along the lower lip, 68 67 71 63 64 back
+along the upper — verified on rendered landmarks; the 106-point mouth is
+not stored in contour order), filled as a concave polygon and dilated by a
+pixel or two, so it hugs the lips instead of boxing them.  When the inner
+lips part by more than `TONGUE_OPEN` (15 %) of the mouth width the lower
+half of the contour drops by `TONGUE_REACH` × the gap, covering a tongue
+that sticks out; a closed mouth adds nothing.
+
 ## Capture flow
 
 `CalibrationSession` is Qt-free: `arm(step)`, then `feed(face)` every frame
