@@ -58,7 +58,7 @@ from PySide6.QtWidgets import (
 )
 
 import modules.globals
-from modules import head_geometry, source_identity
+from modules import head_geometry, source_identity, virtual_camera
 from modules import calibration
 from modules import enhancer_registry
 from modules import swapper_registry
@@ -493,6 +493,7 @@ def save_switch_states():
         "gpu_device": modules.globals.gpu_device,
         "camera_resolution": modules.globals.camera_resolution,
         "face_fader_seconds": modules.globals.face_fader_seconds,
+        "virtual_camera": modules.globals.virtual_camera,
         "head_outline": modules.globals.head_outline,
         "head_yaw_limit": modules.globals.head_yaw_limit,
         "head_pitch_limit": modules.globals.head_pitch_limit,
@@ -560,6 +561,7 @@ def load_switch_states():
         if state.get("camera_resolution") in RESOLUTIONS:
             modules.globals.camera_resolution = state["camera_resolution"]
         modules.globals.face_fader_seconds = max(1, min(60, int(state.get("face_fader_seconds", 5))))
+        modules.globals.virtual_camera = bool(state.get("virtual_camera", False))
         if modules.globals.mouth_reveal_mode not in ("region", "lips"):
             modules.globals.mouth_reveal_mode = "region"
         modules.globals.head_outline = state.get("head_outline", True)
@@ -1030,6 +1032,17 @@ class MainWindow(QMainWindow):
         buttons.addWidget(self.btn_calibrate_quick, 1)
         layout.addLayout(buttons)
 
+        self.sw_virtual_camera = _Switch(
+            _("Virtual camera"), modules.globals.virtual_camera,
+            _("Send the live output to the OBS Virtual Camera device, so Discord, Zoom "
+              "or a browser can pick it as a webcam (needs OBS Studio installed)"),
+        )
+        self.sw_virtual_camera.setEnabled(virtual_camera.available())
+        if not virtual_camera.available():
+            self.sw_virtual_camera.setToolTip(_("pyvirtualcam is not installed"))
+        self.sw_virtual_camera.toggled.connect(self._on_virtual_camera)
+        layout.addWidget(self.sw_virtual_camera)
+
         fader = QHBoxLayout()
         self.btn_fader = QPushButton(_("Face fader"))
         self.btn_fader.setObjectName("secondary")
@@ -1046,6 +1059,12 @@ class MainWindow(QMainWindow):
         layout.addLayout(fader)
         layout.addStretch(1)
         return page
+
+    def _on_virtual_camera(self, value: bool) -> None:
+        modules.globals.virtual_camera = value
+        if not value:
+            virtual_camera.stop()
+        save_switch_states()
 
     # ── face fader ───────────────────────────────────────────────────────
 
@@ -2354,6 +2373,7 @@ class WebcamPreviewWindow(QWidget):
             return
 
         camera_fps = self._cap.actual_fps
+        self._camera_fps = float(camera_fps or 30.0)
         print(
             f"[webcam] Camera running at {self._cap.actual_width}x"
             f"{self._cap.actual_height}@{camera_fps:.0f}fps"
@@ -2409,6 +2429,11 @@ class WebcamPreviewWindow(QWidget):
                 return
             bgr_frame = record.frame
             self._shown_seq = record.seq
+        if modules.globals.virtual_camera:
+            # The clean composed frame goes out before the on-screen overlay.
+            virtual_camera.send(bgr_frame, self._camera_fps)
+        elif virtual_camera.active():
+            virtual_camera.stop()
         if modules.globals.show_fps:
             if bgr_frame is record.frame:
                 bgr_frame = bgr_frame.copy()
@@ -2435,6 +2460,7 @@ class WebcamPreviewWindow(QWidget):
                 self._cap.release()
             except Exception:
                 pass
+        virtual_camera.stop()
         global _WEBCAM_PREVIEW
         if _WEBCAM_PREVIEW is self:
             _WEBCAM_PREVIEW = None

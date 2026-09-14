@@ -29,6 +29,8 @@ source_paths: list = []
 source_picks: dict = {}
 # Face fader: seconds for the swap to fade in or out.
 face_fader_seconds: int = 5
+# Send the live output to a virtual camera device (OBS Virtual Camera).
+virtual_camera: bool = False
 target_path: str | None = None
 output_path: str | None = None
 

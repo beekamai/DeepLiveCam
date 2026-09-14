@@ -215,5 +215,8 @@
     "Face fader": "Плавная подмена",
     "Fade the swap in (or back out) gradually while streaming": "Плавно включить подмену (или так же плавно убрать) во время стрима",
     "How long the fade takes": "Сколько длится переход",
-    "Stop fade": "Остановить"
+    "Stop fade": "Остановить",
+    "Virtual camera": "Виртуальная камера",
+    "Send the live output to the OBS Virtual Camera device, so Discord, Zoom or a browser can pick it as a webcam (needs OBS Studio installed)": "Отдавать живой вывод в устройство OBS Virtual Camera, чтобы Discord, Zoom или браузер видели его как веб-камеру (нужен установленный OBS Studio)",
+    "pyvirtualcam is not installed": "pyvirtualcam не установлен"
 }
