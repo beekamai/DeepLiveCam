@@ -193,6 +193,13 @@ class CalibrationDialog(QDialog):
 
         root.addWidget(self._build_panel(), 2)
 
+        from modules.ui import is_virtual_output
+
+        if is_virtual_output(camera_index):
+            self._preview.setText(_("That entry is the OBS virtual camera output, not a webcam — "
+                                    "pick your real camera."))
+            self._cap = None
+            return
         self._cap = VideoCapturer(camera_index)
         if not self._cap.start(CAPTURE_WIDTH, CAPTURE_HEIGHT, 30,
                                on_wait=QApplication.processEvents):

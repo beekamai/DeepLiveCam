@@ -674,19 +674,36 @@ def _obs_virtual_camera_name() -> Optional[str]:
         return None
 
 
+# Device indices that are virtual camera *outputs* (filled by
+# get_available_cameras): opening one as a webcam reads back our own output
+# at best, and the OBS filter crashes the process when opened with the
+# MJPG/size/fps parameters real webcams need.
+_VIRTUAL_OUTPUTS: set = set()
+
+
+def is_virtual_output(camera_index: int) -> bool:
+    return camera_index in _VIRTUAL_OUTPUTS
+
+
 def get_available_cameras() -> Tuple[List[int], List[str]]:
     if platform.system() == "Windows":
         try:
             graph = FilterGraph()
             devices = list(graph.get_input_devices())
             if devices:
-                # A virtual camera *output* in the list is a trap: opening it
-                # gives a black picture at 1 fps.  Label it and list it last.
+                # The OBS filter is matched by its CLSID, whatever it is
+                # called: label it and list it last.
                 obs = _obs_virtual_camera_name()
+                _VIRTUAL_OUTPUTS.clear()
                 indices = list(range(len(devices)))
-                names = [f"{d} — OBS Virtual Camera (output, not a webcam)"
-                         if obs and d == obs else d for d in devices]
-                order = sorted(indices, key=lambda i: names[i] != devices[i])
+                names = []
+                for i, d in enumerate(devices):
+                    if obs and d == obs:
+                        _VIRTUAL_OUTPUTS.add(i)
+                        names.append(_("{name} — virtual camera (OBS), not a webcam").format(name=d))
+                    else:
+                        names.append(d)
+                order = sorted(indices, key=lambda i: i in _VIRTUAL_OUTPUTS)
                 return [indices[i] for i in order], [names[i] for i in order]
             return [], ["No cameras found"]
         except Exception as exc:
@@ -2029,6 +2046,10 @@ class MainWindow(QMainWindow):
             update_status("No camera available")
             return
         camera_index = self._camera_indices[idx]
+        if is_virtual_output(camera_index):
+            update_status("That entry is the OBS virtual camera output, not a webcam — "
+                          "pick your real camera. (Opening it would crash the app.)")
+            return
         if _CALIBRATION is not None and _CALIBRATION.isVisible():
             _CALIBRATION.close()
         if _LIVE_MAPPER is not None and _LIVE_MAPPER.isVisible():
@@ -2536,6 +2557,11 @@ class WebcamPreviewWindow(QWidget):
 
         self._image_label.setText(_("Opening camera..."))
         self.camera_index = camera_index
+        if is_virtual_output(camera_index):
+            update_status("That entry is the OBS virtual camera output, not a webcam — "
+                          "pick your real camera. (Opening it would crash the app.)")
+            QTimer.singleShot(0, self.close)
+            return
         self._cap = VideoCapturer(camera_index)
         width, height = RESOLUTIONS.get(modules.globals.camera_resolution, RESOLUTIONS["720p"])
         # processEvents keeps the window painted and closable while the camera
@@ -2769,6 +2795,11 @@ class LiveMapperDialog(QDialog):
     def __init__(self, camera_index: int, mapping: list):
         super().__init__(_MAIN)
         self._camera_index = camera_index
+        if is_virtual_output(camera_index):
+            update_status("That entry is the OBS virtual camera output, not a webcam — "
+                          "pick your real camera.")
+            QTimer.singleShot(0, self.close)
+            return
         self._map = mapping
         self.setWindowTitle(_("Source x Target Mapper"))
         self.resize(POPUP_LIVE_WIDTH, POPUP_LIVE_HEIGHT)

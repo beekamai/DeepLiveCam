@@ -240,5 +240,8 @@
     "Ready": "Готово",
     "Could not download {name} — see the console.": "Не удалось скачать {name} — см. консоль.",
     "The camera gives a black picture — reopening it. If this device is a virtual camera (OBS, Camo), pick your real webcam instead.": "Камера отдаёт чёрную картинку — переоткрываю её. Если это виртуальная камера (OBS, Camo), выберите настоящую веб-камеру.",
-    "Could not download": "Не удалось скачать"
+    "Could not download": "Не удалось скачать",
+    "{name} — virtual camera (OBS), not a webcam": "{name} — виртуальная камера (OBS), не веб-камера",
+    "That entry is the OBS virtual camera output, not a webcam — pick your real camera. (Opening it would crash the app.)": "Этот пункт — выход виртуальной камеры OBS, не веб-камера; выберите настоящую камеру. (Её открытие роняет приложение.)",
+    "That entry is the OBS virtual camera output, not a webcam — pick your real camera.": "Этот пункт — выход виртуальной камеры OBS, не веб-камера; выберите настоящую камеру."
 }
