@@ -327,6 +327,29 @@ def swap_alpha(face: Any) -> float:
     return hold * profile.swap_alpha(kps)
 
 
+def _similarity(src: np.ndarray, dst: np.ndarray) -> Optional[np.ndarray]:
+    """Least-squares similarity (scale, rotation, shift) mapping src to dst.
+
+    All points weigh in. A robust estimator on three points picks the best
+    pair instead, and switches pairs from frame to frame: measured as angle
+    jumps of several degrees on a still face.
+    """
+    src = np.asarray(src, dtype=np.float64)
+    dst = np.asarray(dst, dtype=np.float64)
+    src_mean = src.mean(axis=0)
+    dst_mean = dst.mean(axis=0)
+    s = src - src_mean
+    d = dst - dst_mean
+    var = float((s ** 2).sum())
+    if var < 1e-9:
+        return None
+    a = float((s * d).sum()) / var
+    b = float((s[:, 0] * d[:, 1] - s[:, 1] * d[:, 0]).sum()) / var
+    rotation = np.array([[a, -b], [b, a]], dtype=np.float64)
+    shift = dst_mean - rotation @ src_mean
+    return np.hstack([rotation, shift[:, None]]).astype(np.float32)
+
+
 def stable_kps(face: Any) -> Optional[np.ndarray]:
     """Five alignment keypoints whose mouth corners ignore the lips.
 
@@ -350,9 +373,7 @@ def stable_kps(face: Any) -> Optional[np.ndarray]:
     if kps.shape != (5, 2):
         return None
     reference_kps = profile.blended(kps)[1]
-    affine = cv2.estimateAffinePartial2D(
-        reference_kps[:3], kps[:3], method=cv2.LMEDS,
-    )[0]
+    affine = _similarity(reference_kps[:3], kps[:3])
     if affine is None:
         return None
     corners = cv2.transform(reference_kps[3:5].reshape(1, -1, 2), affine).reshape(-1, 2)
