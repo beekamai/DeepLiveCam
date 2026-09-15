@@ -2141,7 +2141,11 @@ class PreviewWindow(QWidget):
 
         self._image_label = QLabel()
         self._image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._image_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        # Ignored: a QLabel holding a pixmap reports the pixmap as its minimum
+        # size, and frames are fitted to the label — that pair grows the window
+        # by a pixel every frame and the mask visibly jitters on the face.
+        self._image_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+        self._image_label.setMinimumSize(1, 1)
         layout.addWidget(self._image_label, 1)
 
         self._slider = QSlider(Qt.Orientation.Horizontal)
@@ -2540,7 +2544,11 @@ class WebcamPreviewWindow(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         self._image_label = QLabel()
         self._image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._image_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        # Ignored: a QLabel holding a pixmap reports the pixmap as its minimum
+        # size, and frames are fitted to the label — that pair grows the window
+        # by a pixel every frame and the mask visibly jitters on the face.
+        self._image_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+        self._image_label.setMinimumSize(1, 1)
         layout.addWidget(self._image_label, 1)
 
         # closeEvent can run before the camera is up (a failed open schedules
@@ -2646,7 +2654,7 @@ class WebcamPreviewWindow(QWidget):
                 bgr_frame, f"FPS: {record.fps:.1f}", (10, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2,
             )
-        bgr_frame = fit_image_to_size(bgr_frame, self.width(), self.height())
+        bgr_frame = fit_image_to_size(bgr_frame, self._image_label.width(), self._image_label.height())
         self._image_label.setPixmap(_bgr_to_qpixmap(bgr_frame))
 
     def closeEvent(self, event) -> None:
