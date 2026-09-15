@@ -897,6 +897,9 @@ class MainWindow(QMainWindow):
         self._status_label.setObjectName("statusLabel")
         self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._status_label.setWordWrap(True)
+        # Two lines reserved: a status that wraps or clears must not change
+        # the height of the stage above it, or the live picture jumps.
+        self._status_label.setFixedHeight(self._status_label.fontMetrics().lineSpacing() * 2 + 4)
         right.addWidget(self._status_label)
         # Indeterminate bar shown while a model loads or a TensorRT engine
         # builds — the window stays responsive, and this says why it waits.
@@ -904,6 +907,9 @@ class MainWindow(QMainWindow):
         self._busy_bar.setRange(0, 0)
         self._busy_bar.setTextVisible(False)
         self._busy_bar.setFixedHeight(6)
+        bar_policy = self._busy_bar.sizePolicy()
+        bar_policy.setRetainSizeWhenHidden(True)
+        self._busy_bar.setSizePolicy(bar_policy)
         self._busy_bar.hide()
         self._busy_depth = 0
         right.addWidget(self._busy_bar)
