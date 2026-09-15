@@ -78,7 +78,7 @@
     "Fade out on deep turns": "Гасить при сильных поворотах",
     "Expression-proof crop": "Кроп, устойчивый к мимике",
     "Mirror camera": "Зеркалить камеру",
-    "0 = use swapped mouth, 100 = expose original mouth to chin area": "0 = рот из подмены, 100 = свой рот вплоть до подбородка",
+    "Region: 0 = swapped mouth, 100 = own mouth down to the chin. Lips: how strongly the own lips show through": "Область: 0 = рот из подмены, 100 = свой рот вплоть до подбородка. Губы: насколько сильно проступают свои губы",
     "A minute in front of the camera: your face outline and how far you can turn before the swap lets go": "Минута перед камерой: контур вашего лица и до какого поворота держать подмену",
     "A profile records your own face outline and how far you turn before the swap should hand back the real face.": "Профиль запоминает контур вашего лица и предел поворота, после которого показывается настоящее лицо.",
     "Begin processing the target image/video with selected face": "Обработать целевое изображение/видео с выбранным лицом",

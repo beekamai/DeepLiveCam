@@ -199,4 +199,8 @@ def mouth_reveal_mask(face: Any, affine: np.ndarray, size: int,
     # the moustache it was meant to leave alone.
     blur = max(3, (size // (32 if mode == "lips" else 16)) | 1)
     soft = cv2.GaussianBlur(mask, (blur, blur), 0).astype(np.float32) / 255.0
+    if mode == "lips":
+        # The slider is a reveal strength here, as it is for the eyes: the
+        # real lips blend in gradually instead of switching on at full.
+        soft *= min(max(strength, 0.0), 1.0)
     return 1.0 - soft, polygon

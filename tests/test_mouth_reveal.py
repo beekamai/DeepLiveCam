@@ -10,6 +10,7 @@ from modules.face_reveal import (
     NOSE,
     OUTER_LIP,
     mouth_polygon,
+    mouth_reveal_mask,
 )
 
 
@@ -66,6 +67,14 @@ class MouthRevealTest(unittest.TestCase):
         self.assertAlmostEqual(float(opened[:, 1].min()), float(closed[:, 1].min()), places=3)
         lower = [OUTER_LIP.index(i) for i in LOWER_OUTER]
         self.assertTrue(all(opened[j, 1] > closed[j, 1] for j in lower))
+
+    def test_lips_mode_blends_by_strength_and_region_does_not(self):
+        half = mouth_reveal_mask(_face(), self.affine, 128, 0.5, "lips")[0]
+        full = mouth_reveal_mask(_face(), self.affine, 128, 1.0, "lips")[0]
+        region = mouth_reveal_mask(_face(), self.affine, 128, 0.5, "region")[0]
+        self.assertAlmostEqual(float(half.min()), 0.5, places=2)
+        self.assertAlmostEqual(float(full.min()), 0.0, places=2)
+        self.assertAlmostEqual(float(region.min()), 0.0, places=2)
 
 
 if __name__ == "__main__":

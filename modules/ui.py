@@ -1485,7 +1485,7 @@ class MainWindow(QMainWindow):
                                         "moustache stays swapped, and grows downward for a tongue"))
         self.cb_mouth_mode.currentTextChanged.connect(self._on_mouth_mode_change)
         self.s_mouth.setToolTip(
-            _("0 = use swapped mouth, 100 = expose original mouth to chin area")
+            _("Region: 0 = swapped mouth, 100 = own mouth down to the chin. Lips: how strongly the own lips show through")
         )
         mouth_row = QHBoxLayout()
         mouth_row.addWidget(self.s_mouth, 1)
