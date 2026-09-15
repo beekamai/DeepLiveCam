@@ -897,22 +897,24 @@ class MainWindow(QMainWindow):
         self._status_label.setObjectName("statusLabel")
         self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._status_label.setWordWrap(True)
-        # Two lines reserved: a status that wraps or clears must not change
-        # the height of the stage above it, or the live picture jumps.
-        self._status_label.setFixedHeight(self._status_label.fontMetrics().lineSpacing() * 2 + 4)
-        right.addWidget(self._status_label)
         # Indeterminate bar shown while a model loads or a TensorRT engine
         # builds — the window stays responsive, and this says why it waits.
         self._busy_bar = QProgressBar()
         self._busy_bar.setRange(0, 0)
         self._busy_bar.setTextVisible(False)
         self._busy_bar.setFixedHeight(6)
-        bar_policy = self._busy_bar.sizePolicy()
-        bar_policy.setRetainSizeWhenHidden(True)
-        self._busy_bar.setSizePolicy(bar_policy)
         self._busy_bar.hide()
         self._busy_depth = 0
-        right.addWidget(self._busy_bar)
+        # One fixed-height row holds both, the bar drawn over the label's
+        # bottom edge: a status that wraps, clears, or shows the bar must not
+        # change the height of the stage above it, or the live picture jumps.
+        status_row = QWidget()
+        status_row.setFixedHeight(self._status_label.fontMetrics().lineSpacing() * 2)
+        status_grid = QGridLayout(status_row)
+        status_grid.setContentsMargins(0, 0, 0, 0)
+        status_grid.addWidget(self._status_label, 0, 0)
+        status_grid.addWidget(self._busy_bar, 0, 0, Qt.AlignmentFlag.AlignBottom)
+        right.addWidget(status_row)
 
         footer = QLabel(f"DeepLiveCam {modules.metadata.version} · GitHub")
         footer.setObjectName("linkLabel")
