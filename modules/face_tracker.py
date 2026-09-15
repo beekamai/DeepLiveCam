@@ -61,14 +61,21 @@ class OneEuroFilter:
     # Tuned on a synthetic pan plus a static noisy frame: this pair tracks a
     # 10 px/frame pan with ~2 px lag while cutting standing-still wobble by a
     # third. Lower beta smooths more but drags visibly behind fast motion.
+    # A point at rest still wanders a fraction of a pixel after filtering,
+    # and the three-point alignment turns that into a breathing crop. The
+    # output trails the filtered point on a leash of this length: wander
+    # inside it moves nothing, motion beyond it is followed continuously,
+    # so the error never exceeds the leash and slow motion never snaps.
     def __init__(self, min_cutoff: float = 1.0, beta: float = 0.4,
-                 d_cutoff: float = 1.0) -> None:
+                 d_cutoff: float = 1.0, deadband: float = 0.6) -> None:
         self.min_cutoff = min_cutoff
         self.beta = beta
         self.d_cutoff = d_cutoff
+        self.deadband = deadband
         self._prev: Optional[np.ndarray] = None
         self._prev_dx: Optional[np.ndarray] = None
         self._prev_time: Optional[float] = None
+        self._held: Optional[np.ndarray] = None
 
     @staticmethod
     def _alpha(cutoff: float, dt: float) -> float:
@@ -79,6 +86,7 @@ class OneEuroFilter:
         self._prev = None
         self._prev_dx = None
         self._prev_time = None
+        self._held = None
 
     def __call__(self, value: np.ndarray, timestamp: Optional[float] = None) -> np.ndarray:
         value = np.asarray(value, dtype=np.float32)
@@ -88,6 +96,7 @@ class OneEuroFilter:
             self._prev = value
             self._prev_dx = np.zeros_like(value)
             self._prev_time = now
+            self._held = value
             return value
 
         dt = now - self._prev_time
@@ -96,6 +105,7 @@ class OneEuroFilter:
             self._prev = value
             self._prev_dx = np.zeros_like(value)
             self._prev_time = now
+            self._held = value
             return value
 
         dx = (value - self._prev) / dt
@@ -110,7 +120,20 @@ class OneEuroFilter:
         self._prev = smoothed
         self._prev_dx = dx_hat
         self._prev_time = now
-        return smoothed
+        return self._hold(smoothed)
+
+    def _hold(self, smoothed: np.ndarray) -> np.ndarray:
+        if self.deadband <= 0 or self._held is None or self._held.shape != smoothed.shape:
+            self._held = smoothed
+            return smoothed
+        delta = smoothed - self._held
+        if smoothed.ndim == 2 and smoothed.shape[-1] == 2:
+            distance = np.linalg.norm(delta, axis=-1, keepdims=True)
+        else:
+            distance = np.abs(delta)
+        excess = np.clip(1.0 - self.deadband / np.maximum(distance, 1e-6), 0.0, 1.0)
+        self._held = (self._held + delta * excess).astype(np.float32)
+        return self._held
 
 
 class FaceTracker:
