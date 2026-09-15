@@ -108,6 +108,17 @@ Levers that remain after TensorRT: the CPU milliseconds around the models
 (paste-back and mask warps are ~8 ms of the swap stage) and running XSeg
 every 2nd frame (`occlusion_interval`).
 
+## Measuring: replay a recorded session
+
+`tools/record_session.py` records the camera the way Live opens it;
+`tools/replay_bench.py` feeds the recording to the live processing worker
+through the same queues and reports throughput, camera-paced latency,
+keypoint and crop-affine wobble per segment, the re-anchoring snap at each
+detection, and (`--profile`) milliseconds per stage.  Every number in this
+file after 2026-09-15 comes from that stand: it is deterministic and needs
+nobody in front of the camera, so before/after comparisons are one command
+each.
+
 ## Poisson blend at quarter resolution
 
 The Poisson solve (`_poisson_roi_blend`) produces a smooth colour

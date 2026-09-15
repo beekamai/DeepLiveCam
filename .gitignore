@@ -40,3 +40,5 @@ media/*
 !media/ui_media.png
 onnxruntime_profile__*.json
 library.json
+
+bench_out/
