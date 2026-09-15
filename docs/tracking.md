@@ -8,6 +8,14 @@ and smooths what it hands out.
 ## Detection cadence
 
 Wall-clock based: every 0.25 s while tracking (0.08 s without), **plus**
+every frame while the tracker is unsettled (`FaceTracker.unsettled`: the
+keypoints moved more than 8 px in a frame, or the last detection landed
+more than 8 px from where the flow predicted it) — a fast head or a hand
+across the face leaves the flow behind, and the re-anchoring snap is the
+jump the viewer sees; with a detection every frame the flow bridges one
+frame at a time.  Replay of a recorded session, motion segment: snap at
+re-anchoring 12.9 → 8.7 px mean, p90 30.8 → 17.7 px, throughput unchanged
+(the detector runs 5 instead of 4 times a second overall).  **Plus**
 whenever the worker skipped three or more camera frames — flow across a
 gap that wide was 20–40 px off, and a detection costs 6 ms against a
 whole mis-aligned swap.  Any UI toggle that changes the picture (mirror,
