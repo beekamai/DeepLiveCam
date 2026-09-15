@@ -14,7 +14,12 @@ provider today is `Landmark3DProvider`: insightface's `1k3d68.onnx` from
 the buffalo_l pack (already downloaded for the detector), run through
 `create_onnx_session` (TensorRT or CUDA graph like every other model), its
 68 3D points fitted to insightface's mean shape for the Euler angles —
-about 3 ms per face including the crop.  Anything that yields the same
+about 3 ms per face including the crop.  The model runs on detection
+frames only: between detections the tracker carries the pose rigidly by
+the similarity its flow found for the face (`HeadPose.moved`), so the
+silhouette follows the head without the model's own per-frame noise, and
+the stage costs ~1.5 ms per frame amortised instead of 3.9 (a moving head
+is detected every frame anyway, see tracking.md).  Anything that yields the same
 record can replace it: a dense mesh (MediaPipe Face Mesh, 3DDFA_V2) or an
 iPhone TrueDepth stream (LiveLinkFace sends head pose and 52 blendshapes
 over UDP) — that is the planned third step.

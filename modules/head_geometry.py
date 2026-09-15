@@ -19,6 +19,7 @@ import threading
 from dataclasses import dataclass
 from typing import Any, Optional
 
+import cv2
 import numpy as np
 
 import modules.globals
@@ -44,6 +45,14 @@ class HeadPose:
     pitch: float    # degrees, positive looking up
     roll: float     # degrees
     landmarks: np.ndarray   # (68, 3) in frame pixels, z relative
+
+    def moved(self, affine: np.ndarray) -> "HeadPose":
+        """The same pose carried by a 2x3 similarity of the frame plane: the
+        landmarks follow the face the flow tracked, angles stay."""
+        points = np.asarray(self.landmarks, dtype=np.float32).copy()
+        xy = cv2.transform(points[:, :2].reshape(1, -1, 2), np.asarray(affine, dtype=np.float64))
+        points[:, :2] = xy.reshape(-1, 2)
+        return HeadPose(yaw=self.yaw, pitch=self.pitch, roll=self.roll, landmarks=points)
 
     def outline(self) -> np.ndarray:
         """Face silhouette from the 3D fit, (N, 2) frame pixels: jaw contour

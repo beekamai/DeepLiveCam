@@ -420,7 +420,7 @@ class FaceTracker:
         self._prev_gray = gray
         self._remember_wide(frame)
         self._bbox = self._bbox + np.concatenate([centre_shift, centre_shift])
-        return self._apply(face, points, self._bbox, timestamp)
+        return self._apply(face, points, self._bbox, timestamp, carry=transform)
 
     def _coast(self, frame: np.ndarray, face: Any,
                timestamp: Optional[float]) -> Any:
@@ -436,16 +436,24 @@ class FaceTracker:
         if self._support is not None:
             self._support = self._support + self._velocity
         self._bbox = self._bbox + np.concatenate([self._velocity, self._velocity])
+        carry = np.array([[1.0, 0.0, self._velocity[0]], [0.0, 1.0, self._velocity[1]]], dtype=np.float32)
         self._velocity = self._velocity * COAST_DECAY
         self.speed = float(np.linalg.norm(self._velocity))
         self._region = self._plan_region(frame)
         self._prev_gray = self._grey(frame, self._region)
         self._remember_wide(frame)
-        return self._apply(face, self._points, self._bbox, timestamp)
+        return self._apply(face, self._points, self._bbox, timestamp, carry=carry)
 
     def _apply(self, face: Any, points: np.ndarray, bbox: np.ndarray,
-               timestamp: Optional[float] = None) -> Any:
-        """Write smoothed geometry onto the face object."""
+               timestamp: Optional[float] = None,
+               carry: Optional[np.ndarray] = None) -> Any:
+        """Write smoothed geometry onto the face object.
+
+        ``carry`` is the similarity the flow found for this frame: the head
+        pose and its 3D silhouette are rigid with the face, so they move by
+        it instead of being re-estimated every frame (the model runs again
+        on the next detection).
+        """
         smoothed = self._filter(points, timestamp)
         face.kps = smoothed.astype(np.float32)
         face.bbox = np.asarray(bbox, dtype=np.float32)
@@ -455,8 +463,9 @@ class FaceTracker:
         # consumers recompute instead of using stale positions.
         if getattr(face, "landmark_2d_106", None) is not None:
             face.landmark_2d_106 = None
-        if getattr(face, "head_pose", None) is not None:
-            face.head_pose = None
+        head = getattr(face, "head_pose", None)
+        if head is not None:
+            face.head_pose = head.moved(carry) if carry is not None and hasattr(head, "moved") else None
         if self._miss_since is None:
             face.track_alpha = 1.0
         else:

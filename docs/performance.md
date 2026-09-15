@@ -12,6 +12,7 @@ halves every number below.
 |---|---|
 | detect (every 0.25 s, amortised) | 1.4 |
 | landmarks (every frame) | 1.4 |
+| head pose (detection frames, carried by the flow between them) | 1.5 |
 | tracker flow | 1.5 |
 | swap: graph replay 9.5, XSeg 4.7, warps + masks + paste ~8 | 22.8 |
 | enhance: graph replay 8.5, warps + blend ~3 | 11.9 |
