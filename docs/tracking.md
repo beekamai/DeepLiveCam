@@ -27,8 +27,13 @@ does not drop out for a cycle while the old state catches up.
   regrown when fewer than eight survive.  Measured: a skin-coloured hand
   crossing the face drags the keypoints 5.9 px mean / 12 px max (was 13 /
   34 with the five keypoints alone); 10–20 px/frame pans track within 2 px.
-* One Euro filter on the output; scale and jump limits send the tracker
-  coasting on its last velocity when the flow latched onto something else.
+* One Euro filter on the output, followed by a 0.6 px leash
+  (`OneEuroFilter.deadband`): the handed-out point trails the filtered one
+  and does not move while it wanders inside the leash, so a still face
+  stops breathing (measured live: keypoint wander 0.39 → 0.25 px, mean
+  step per frame 0.14 → 0.05 px; fast motion unchanged, lag bounded by
+  the leash).  Scale and jump limits send the tracker coasting on its last
+  velocity when the flow latched onto something else.
 
 ## Hold through a missed detection
 

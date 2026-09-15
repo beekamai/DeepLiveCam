@@ -106,3 +106,20 @@ while the display keeps every camera frame through reprojection.
 Levers that remain after TensorRT: the CPU milliseconds around the models
 (paste-back and mask warps are ~8 ms of the swap stage) and running XSeg
 every 2nd frame (`occlusion_interval`).
+
+## Poisson blend at quarter resolution
+
+The Poisson solve (`_poisson_roi_blend`) produces a smooth colour
+correction, so it runs on a downscaled crop and the correction is resampled
+back.  `POISSON_SOLVE_SCALE` went 0.5 → 0.25: against the half-resolution
+result the mean difference is 0.5 level and the 99th percentile 2 levels,
+while the solve is 3x faster.  Replay of a recorded session: swap stage
+32 → 24.5 ms, pipeline 19.8 → 23.7 frames/s.  0.125 was rejected — 6 levels
+at the 99th percentile shows at the mask edge.
+
+## Latency: one slot in the capture queue
+
+The processing worker is slower than the camera, so any frame waiting
+behind the one being processed is pure latency.  The capture queue holds
+one frame (drop-oldest).  Replay paced at 30 fps: median camera-to-result
+latency 122 → 64 ms, no change in processed frames per second.

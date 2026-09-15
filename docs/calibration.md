@@ -86,7 +86,13 @@ a finger far better than the 106 landmarks do — a landmark-only affine fit
 was 4 % off in scale under a finger, the detector 1 %) and replaces the
 corners with the profile's neutral corners carried by the similarity those
 three points define, slid vertically onto the live lip centre so a tilted
-head keeps its foreshortening.  Synthetic pucker/smile: crop scale error
+head keeps its foreshortening.  That similarity is a closed-form
+least-squares fit over all three points (`_similarity`), not a robust
+estimator: LMEDS on three points picks the best pair and switched pairs
+from frame to frame — replayed on a recorded still face it added angle
+jumps of 1° on average and up to 11° between consecutive frames while the
+tracker's own keypoints moved 0.06°; the least-squares fit matches the
+tracker.  Synthetic pucker/smile: crop scale error
 +7 % → 0 % horizontally; a finger crossing the face: 2.7 → 2.3 px keypoint
 error.  The detector keypoints stay on `face.raw_kps` for the pose proxies.
 Toggle: **Expression-proof crop** (`stable_alignment`).
@@ -110,7 +116,10 @@ that region's outline.  A second mode, **Lips only**, never rises above the
 upper lip's edge — a real moustache stays swapped when the source has none —
 and grows only a little sideways and downward, where a stuck-out tongue
 goes; its feather is half as wide so the blur does not climb back over the
-moustache.  The combo next to the slider picks the mode
+moustache.  In this mode the slider is also a reveal strength, as for the
+eyes: the real lips blend in by the slider's weight instead of switching on
+at full as soon as it leaves zero (the region mode keeps the slider as a
+pure size).  The combo next to the slider picks the mode
 (`modules.globals.mouth_reveal_mode`).
 
 The lips polygon is the outer lip *contour* in landmark order
