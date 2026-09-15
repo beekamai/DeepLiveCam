@@ -2426,7 +2426,11 @@ class _ProcessingWorker(QThread):
                     frame_processors = get_frame_processors_modules(modules.globals.frame_processors)
                     get_face_swapper()
                     _preload_live_models()
-                detected_now = (time.time() - last_detection >= det_period
+                # A fast head or a detection the flow did not predict: detect
+                # every frame until the tracker settles, so the flow bridges
+                # one frame at a time instead of a quarter second.
+                period = 0.0 if (modules.globals.face_tracking and tracker.unsettled) else det_period
+                detected_now = (time.time() - last_detection >= period
                                 or seq - last_seq >= 3 or seq <= force_detect_until)
                 last_seq = seq
                 if detected_now:

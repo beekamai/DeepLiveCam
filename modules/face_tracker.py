@@ -42,6 +42,11 @@ RANSAC_THRESHOLD = 3.0
 MAX_SCALE_STEP = 0.3
 # How much of the last velocity survives each coasted frame.
 COAST_DECAY = 0.8
+# Above this keypoint speed (px/frame), or this gap between the flow's
+# prediction and the next detection (px), the face is moving faster than
+# the flow follows reliably: the caller detects every frame until it calms.
+FAST_SPEED = 8.0
+FAST_DISAGREEMENT = 8.0
 # Frames of current velocity to pad the flow region with, ahead of the face.
 VELOCITY_LEAD = 3.0
 # Extra flow points spread over the head (hairline, brows, jaw, ears): a
@@ -151,11 +156,20 @@ class FaceTracker:
         self._points: Optional[np.ndarray] = None   # kps in full-frame coords
         self._support: Optional[np.ndarray] = None  # extra flow points, frame coords
         self._bbox: Optional[np.ndarray] = None
+        self.speed = 0.0          # last accepted keypoint shift, px/frame
+        self.disagreement = 0.0   # flow prediction vs last detection, px
         self._filter = OneEuroFilter()
         self._face: Any = None                      # last face object handed out
         self._miss_since: Optional[float] = None    # when the detector last lost the face
 
+    @property
+    def unsettled(self) -> bool:
+        """The face moves faster than the flow follows: detect every frame."""
+        return self.speed > FAST_SPEED or self.disagreement > FAST_DISAGREEMENT
+
     def reset(self) -> None:
+        self.speed = 0.0
+        self.disagreement = 0.0
         self._prev_gray = None
         self._region = None
         self._velocity = np.zeros(2, dtype=np.float32)
@@ -276,6 +290,12 @@ class FaceTracker:
                 return None
             return self.track(frame, self._face, timestamp)
         self._miss_since = None
+        if self._points is not None:
+            detected = np.asarray(face.kps, dtype=np.float32)
+            if detected.shape == self._points.shape:
+                self.disagreement = float(np.linalg.norm(detected - self._points, axis=1).mean())
+        else:
+            self.disagreement = 0.0
         if self._points is None and self._reset_outline:
             from modules.processors.frame._onnx_enhancer import reset_face_outline
 
@@ -383,6 +403,7 @@ class FaceTracker:
             return self._coast(frame, face, timestamp)
 
         self._velocity = centre_shift.astype(np.float32)
+        self.speed = float(np.linalg.norm(shift, axis=1).max())
         self._points = points
         if self._support is not None:
             # Support points keep their measured positions (they follow the
@@ -416,6 +437,7 @@ class FaceTracker:
             self._support = self._support + self._velocity
         self._bbox = self._bbox + np.concatenate([self._velocity, self._velocity])
         self._velocity = self._velocity * COAST_DECAY
+        self.speed = float(np.linalg.norm(self._velocity))
         self._region = self._plan_region(frame)
         self._prev_gray = self._grey(frame, self._region)
         self._remember_wide(frame)
